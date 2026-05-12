@@ -1,10 +1,12 @@
 """
 AI 商业视频制片工作台 - Flask 后端
-支持画幅比例强控
+Gemini 风格重构版
 """
 import os
+import re
 import json
 import base64
+import shutil
 import traceback
 from datetime import datetime
 from io import BytesIO
@@ -27,16 +29,98 @@ except ImportError:
 
 from database import init_database, create_project, update_project, get_all_projects, get_project, delete_project
 
-load_dotenv()
+# 加载环境变量（强制重新加载）
+load_dotenv(override=True)
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
 
-API_KEY = os.getenv("NEW_API_KEY", os.getenv("OPENAI_API_KEY", ""))
-API_BASE = os.getenv("NEW_API_BASE_URL", os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1"))
-MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o")
+ENV_FILE = os.path.join(os.path.dirname(__file__), '.env')
 
-client = OpenAI(api_key=API_KEY, base_url=API_BASE)
+
+# ==================== 环境变量管理 ====================
+def get_settings():
+    """读取当前设置"""
+    return {
+        'api_key': os.getenv("NEW_API_KEY", ""),
+        'api_base': os.getenv("NEW_API_BASE_URL", "https://api.openai.com/v1"),
+        'model_name': os.getenv("MODEL_NAME", "gpt-4o")
+    }
+
+
+def save_settings(api_key: str, api_base: str, model_name: str) -> bool:
+    """保存设置到 .env 文件"""
+    try:
+        lines = []
+        if os.path.exists(ENV_FILE):
+            with open(ENV_FILE, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+
+        # 更新或添加配置
+        new_lines = []
+        keys = {
+            "NEW_API_KEY": api_key,
+            "NEW_API_BASE_URL": api_base or "https://api.openai.com/v1",
+            "MODEL_NAME": model_name or "gpt-4o"
+        }
+        found = {k: False for k in keys}
+
+        for line in lines:
+            stripped = line.strip()
+            # 保留注释行和空行
+            if not stripped or stripped.startswith('#'):
+                new_lines.append(line)
+                continue
+            if '=' in stripped:
+                key = stripped.split('=', 1)[0].strip()
+                if key in keys:
+                    new_lines.append(f"{key}={keys[key]}\n")
+                    found[key] = True
+                else:
+                    new_lines.append(line)
+            else:
+                new_lines.append(line)
+
+        # 添加缺失的键
+        for key, val in keys.items():
+            if not found[key]:
+                new_lines.append(f"{key}={val}\n")
+
+        with open(ENV_FILE, 'w', encoding='utf-8') as f:
+            f.writelines(new_lines)
+
+        # 强制重新加载环境变量
+        for key in ["NEW_API_KEY", "NEW_API_BASE_URL", "MODEL_NAME"]:
+            os.environ.pop(key, None)
+        load_dotenv(override=True)
+        return True
+    except Exception as e:
+        print(f"保存设置失败: {e}")
+        return False
+
+
+# ==================== OpenAI 客户端 ====================
+def get_client():
+    """获取当前配置的 OpenAI 客户端"""
+    # 直接读取 .env 文件，确保获取最新配置
+    env_path = os.path.join(os.path.dirname(__file__), '.env')
+    load_dotenv(env_path, override=True)
+    
+    api_key = os.getenv("NEW_API_KEY", "")
+    api_base = os.getenv("NEW_API_BASE_URL", "https://api.openai.com/v1")
+    model = os.getenv("MODEL_NAME", "")
+    
+    print(f"[DEBUG] 读取 .env 文件: {env_path}")
+    print(f"[DEBUG] API Key: {api_key[:15]}..." if api_key else "[DEBUG] API Key: 未设置")
+    print(f"[DEBUG] API Base: {api_base}")
+    print(f"[DEBUG] Model: {model}")
+    
+    if not api_key:
+        raise Exception("API Key 未配置！请编辑 .env 文件设置 NEW_API_KEY")
+    if not model:
+        raise Exception("模型名称未配置！请编辑 .env 文件设置 MODEL_NAME")
+        
+    return OpenAI(api_key=api_key, base_url=api_base)
 
 
 # ==================== 图片压缩 ====================
@@ -63,39 +147,40 @@ TASK: Analyze product images and generate a precise English product appearance d
 
 RULES:
 1. Output ONLY comma-separated English tags
-2. Focus on: material, texture, color, shape, surface finish, structural details
+2. Focus on: material, texture, color, shape, surface finish, structural details, LOGO design
 3. NO lighting, background, or environmental elements
 4. Keep under 200 characters
+5. Always include "LOGO" if the product has a visible brand mark
 
-Example: "metallic aluminum alloy, brushed surface, matte silver finish, cylindrical body, precision-machined edges, minimalist design"
+Example: "metallic aluminum alloy, brushed surface, matte silver finish, cylindrical body, precision-machined edges, minimalist design, embossed LOGO"
 """
 
 PRODUCT_ANALYSIS_USER = """Analyze this product image and describe its appearance for Midjourney image generation.
 
-Focus on: exact colors, material texture (matte/glossy/brushed/metallic), shape, surface finish, key structural elements, size proportions.
+Focus on: exact colors, material texture (matte/glossy/brushed/metallic), shape, surface finish, key structural elements, size proportions, LOGO visibility.
 
 Output ONLY English tags, comma-separated."""
 
 
 def build_script_system_prompt(aspect_ratio: str) -> str:
     """根据画幅比例构建动态 system prompt"""
+    ar_display = "16:9 横屏 (Cinematic Widescreen)" if aspect_ratio == "16:9" else "9:16 竖屏 (Vertical Mobile)"
+
     if aspect_ratio == '9:16':
         composition_rules = """
 【画幅与构图控制法则 - 9:16 竖屏】
-- 提示词必须包含：vertical video format, portrait orientation, tight framing, optimized for mobile
-- 产品主体必须居中或放置在垂直三分线上
-- 绝对不能超出画面边界
-- 背景简洁，聚焦纵向空间
-"""
+- 提示词必须包含：vertical video format, portrait orientation, tight framing, optimized for mobile, vertical composition
+- 产品主体居中或放置在垂直三分线上
+- 简洁纵向背景，聚焦主体
+- 画幅描述：16:9 横屏 → 9:16 竖屏（请在中文翻译中明确标注画幅比例）"""
         ar_param = "--ar 9:16"
-    else:  # 16:9
+    else:
         composition_rules = """
 【画幅与构图控制法则 - 16:9 横屏】
-- 提示词必须包含：cinematic widescreen, landscape orientation, expansive environment, film grain
-- 强调横向空间的广阔感和电影级构图
-- 可以包含更多的环境背景元素
-- 遵循经典的三分法构图
-"""
+- 提示词必须包含：cinematic widescreen, landscape orientation, expansive environment, film grain, cinematic composition
+- 横向广阔空间，电影级构图
+- 可包含更多环境背景元素
+- 画幅描述：9:16 竖屏 → 16:9 横屏（请在中文翻译中明确标注画幅比例）"""
         ar_param = "--ar 16:9"
 
     return f"""你是一位好莱坞 cinematographer（摄影指导）。
@@ -108,6 +193,7 @@ def build_script_system_prompt(aspect_ratio: str) -> str:
 【铁律 2：动作拆分】
 - 如果某行包含多个动作（如"先俯拍...再侧拍..."），必须拆分为多个独立镜头
 - 每个镜头必须有明确的物理动作
+- 不得遗漏任何动作描述
 
 【铁律 3：首尾帧绑定】
 - 首帧(Start)：描述画面初始状态 + 锚定词
@@ -118,15 +204,19 @@ def build_script_system_prompt(aspect_ratio: str) -> str:
 - 每个首帧和尾帧必须以锚定词开头
 - 锚定词必须原封不动，不能修改
 
+【铁律 5：画幅比例 {ar_display}】
 {composition_rules}
 
-【铁律 5：参数强制写入 - 绝不可省略】
-- 每一个首帧和尾帧提示词的最后，必须无条件加上空格和画幅参数：{ar_param}
-- 这是 Midjourney 的标准语法，直接拼接到英文提示词末尾即可
+【铁律 6：参数强制写入】
+- 每一个首帧和尾帧提示词的最后，必须无条件加上：{ar_param}
+- 直接拼接到英文提示词末尾
 
-【铁律 6：产品不变形红线】
-- 无论画幅如何变化，第一阶段锚定的产品绝对不能发生任何挤压、拉伸或变形
-- 只调整构图和背景，产品保持原样
+【铁律 7：产品不变形红线】
+- 无论画幅如何变化，产品绝对不能发生挤压、拉伸或变形
+- 只调整构图和背景
+
+【铁律 8：LOGO 规范】
+- 所有关于"标识"、"标志"统一翻译为 "LOGO"
 
 【输出格式】
 输出纯 Markdown 表格：
@@ -134,7 +224,7 @@ def build_script_system_prompt(aspect_ratio: str) -> str:
 | 镜头编号 | 景别/焦段 | 画面与动作描述 | 首帧提示词(Start) | 尾帧提示词(End) |
 
 【提示词格式（悬浮翻译）】
-<span title="中文翻译：xxx" class="cursor-help hover:text-blue-400 transition-colors">英文提示词 {ar_param}</span>
+<span title="中文翻译：{ar_display}时尚金属机身，刷纹铝面，柔和灯光">英文提示词 {ar_param}</span>
 
 注意：[Image Reference] 不需要翻译。"""
 
@@ -176,7 +266,7 @@ def delete_project_route(project_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-# ==================== 阶段一：产品特征提取 ====================
+# ==================== 阶段一：产品特征提取（流式） ====================
 @app.route('/api/analyze_product', methods=['POST'])
 def analyze_product():
     try:
@@ -206,21 +296,60 @@ def analyze_product():
             })
         message_content.append({"type": "text", "text": PRODUCT_ANALYSIS_USER})
 
-        try:
-            response = client.chat.completions.create(
-                model=MODEL_NAME,
-                messages=[
-                    {"role": "system", "content": PRODUCT_ANALYSIS_SYSTEM},
-                    {"role": "user", "content": message_content}
-                ],
-                max_tokens=500,
-                temperature=0.7
-            )
-        except Exception as api_err:
-            print(f"API 调用失败: {traceback.format_exc()}")
-            return jsonify({'success': False, 'error': f'API 调用失败: {str(api_err)}'}), 500
+        def generate():
+            try:
+                yield f"data: {json.dumps({'type': 'start', 'message': '正在分析产品...'})}\n\n"
 
-        anchor_prompt = response.choices[0].message.content.strip()
+                client = get_client()
+                stream = client.chat.completions.create(
+                    model=os.getenv("MODEL_NAME", "gpt-4o"),
+                    messages=[
+                        {"role": "system", "content": PRODUCT_ANALYSIS_SYSTEM},
+                        {"role": "user", "content": message_content}
+                    ],
+                    max_tokens=500,
+                    temperature=0.7,
+                    stream=True
+                )
+
+                accumulated = ''
+                for chunk in stream:
+                    if chunk.choices and chunk.choices[0].delta.content:
+                        content = chunk.choices[0].delta.content
+                        accumulated += content
+                        yield f"data: {json.dumps({'type': 'chunk', 'content': content, 'accumulated': accumulated})}\n\n"
+
+                yield f"data: {json.dumps({'type': 'done', 'anchor_prompt': accumulated})}\n\n"
+
+            except Exception as e:
+                error_msg = str(e)
+                print(f"="*50)
+                print(f"分析错误: {error_msg}")
+                print(f"traceback: {traceback.format_exc()}")
+                print(f"="*50)
+                yield f"data: {json.dumps({'type': 'error', 'message': f'服务器错误: {error_msg[:200]}'})}\n\n"
+
+        return Response(
+            generate(),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'X-Accel-Buffering': 'no'
+            }
+        )
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/analyze_product/save', methods=['POST'])
+def analyze_product_save():
+    """保存锚定词并创建项目"""
+    try:
+        data = request.get_json()
+        anchor_prompt = data.get('anchor_prompt', '')
+        product_name = data.get('product_name', '未命名')
 
         project_id = create_project(
             project_name=f"{product_name} - {datetime.now().strftime('%Y%m%d %H:%M')}",
@@ -228,14 +357,8 @@ def analyze_product():
             anchor_prompt=anchor_prompt
         )
 
-        return jsonify({
-            'success': True,
-            'anchor_prompt': anchor_prompt,
-            'project_id': project_id
-        })
-
+        return jsonify({'success': True, 'project_id': project_id})
     except Exception as e:
-        print(f"产品分析错误: {traceback.format_exc()}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -278,10 +401,11 @@ def generate_script():
                 system_prompt = build_script_system_prompt(aspect_ratio)
                 user_prompt = build_script_prompt(anchor_prompt, requirements_content, aspect_ratio)
 
-                yield f"data: {json.dumps({'type': 'start', 'message': f'开始生成 [{aspect_ratio}]...', 'aspect_ratio': aspect_ratio})}\n\n"
+                yield f"data: {json.dumps({'type': 'start', 'message': f'开始生成 [{aspect_ratio}]...'})}\n\n"
 
+                client = get_client()
                 stream = client.chat.completions.create(
-                    model=MODEL_NAME,
+                    model=os.getenv("MODEL_NAME", "gpt-4o"),
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
@@ -298,18 +422,22 @@ def generate_script():
                         accumulated += content
                         yield f"data: {json.dumps({'type': 'chunk', 'content': content, 'accumulated': accumulated})}\n\n"
 
-                yield f"data: {json.dumps({'type': 'done', 'message': '生成完成', 'aspect_ratio': aspect_ratio})}\n\n"
+                yield f"data: {json.dumps({'type': 'done', 'message': '生成完成'})}\n\n"
 
                 if project_id:
                     try:
                         update_project(int(project_id), storyboard_content=accumulated, aspect_ratio=aspect_ratio)
                         yield f"data: {json.dumps({'type': 'saved', 'message': '已保存'})}\n\n"
                     except Exception as save_err:
-                        yield f"data: {json.dumps({'type': 'save_warning', 'message': f'保存失败: {save_err}'})}\n\n"
+                        yield f"data: {json.dumps({'type': 'save_warning', 'message': str(save_err)})}\n\n"
 
             except Exception as e:
-                print(f"生成错误: {traceback.format_exc()}")
-                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+                error_msg = str(e)
+                print(f"="*50)
+                print(f"生成错误: {error_msg}")
+                print(f"traceback: {traceback.format_exc()}")
+                print(f"="*50)
+                yield f"data: {json.dumps({'type': 'error', 'message': f'服务器错误: {error_msg[:200]}'})}\n\n"
 
         return Response(
             generate(),
@@ -326,9 +454,10 @@ def generate_script():
 
 
 def build_script_prompt(anchor_prompt: str, requirements_content: str, aspect_ratio: str) -> str:
+    ar_display = "16:9 横屏" if aspect_ratio == "16:9" else "9:16 竖屏"
     ar_param = f"--ar {aspect_ratio}"
-    
-    prompt = f"""## 【阶段一】产品锚定词 (ANCHOR - 必须原封不动用于所有首尾帧)
+
+    prompt = f"""## 【阶段一】产品锚定词 (ANCHOR)
 
 ```
 {anchor_prompt}
@@ -337,9 +466,9 @@ def build_script_prompt(anchor_prompt: str, requirements_content: str, aspect_ra
 """
 
     if requirements_content:
-        prompt += f"""## 【阶段二】镜头需求表 (CSV/Excel 数据)
+        prompt += f"""## 【阶段二】镜头需求表
 
-请仔细分析以下表格，生成对应数量的镜头：
+请逐行分析以下表格，生成对应数量的镜头：
 ```
 {requirements_content}
 ```
@@ -348,34 +477,29 @@ def build_script_prompt(anchor_prompt: str, requirements_content: str, aspect_ra
 
     prompt += f"""## 【阶段三】画幅比例
 
-当前选择的画幅比例：**{aspect_ratio}**
-
-请在所有提示词末尾添加 Midjourney 画幅参数：`{ar_param}`
+当前选择：{ar_display}
 
 """
 
-    prompt += """## 【执行要求】
+    prompt += f"""## 【执行要求】
 
-1. 逐行分析表格：表格有多少行，就生成至少多少个镜头
-2. 动作拆分：某行多个动作 → 拆分为多个独立镜头
-3. 首帧提示词：画面初始状态 + 锚定词 + 构图词 + {ar_param}
-4. 尾帧提示词：动作完成后状态 + 锚定词 + 构图词 + {ar_param}
-5. 禁止发明任何不在表格中的内容
+1. 逐行分析表格，生成对应数量的镜头
+2. 动作拆分：多个动作 → 多个独立镜头
+3. 首帧提示词：初始状态 + 锚定词 + 构图词 + {ar_param}
+4. 尾帧提示词：完成状态 + 锚定词 + 构图词 + {ar_param}
+5. 中文翻译必须包含画幅比例描述（{ar_display}）
+6. 所有"标识"、"标志"统一写 "LOGO"
 
 ## 【输出格式】
 
-直接输出 Markdown 表格：
-
 | 镜头编号 | 景别/焦段 | 画面与动作描述 | 首帧提示词(Start) | 尾帧提示词(End) |
-|---------|----------|--------------|------------------|----------------|
 
-## 【提示词格式示例】
+## 【提示词格式】
 
-<span title="中文翻译：时尚金属机身，刷纹铝面，柔和灯光，电影级构图" class="cursor-help hover:text-blue-400 transition-colors">metallic aluminum, brushed surface, soft lighting, 8k, product photography, cinematic composition, golden ratio centering {ar_param}</span>
+<span title="中文翻译：{ar_display}时尚金属机身，刷纹铝面，柔和灯光">metallic aluminum, brushed surface, soft lighting, cinematic composition {ar_param}</span>
 
 请立即开始生成："""
 
-    prompt = prompt.replace("{ar_param}", ar_param)
     return prompt
 
 
@@ -384,7 +508,8 @@ if __name__ == '__main__':
     init_database()
     print("=" * 50)
     print("  AI 商业视频制片工作台")
-    print(f"  模型: {MODEL_NAME}")
+    print(f"  模型: {os.getenv('MODEL_NAME', 'gpt-4o')}")
+    print(f"  API:  {os.getenv('NEW_API_BASE_URL', '')}")
     print("  访问: http://localhost:5000")
     print("=" * 50)
     app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)

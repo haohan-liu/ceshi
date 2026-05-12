@@ -7,264 +7,333 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        * { box-sizing: border-box; }
         body { font-family: 'Inter', sans-serif; }
         html, body { overflow: hidden; height: 100%; }
 
-        /* 侧边栏折叠 */
-        .sidebar { transition: width 0.3s ease, padding 0.3s ease; }
-        .sidebar.collapsed { width: 0 !important; padding: 0 !important; overflow: hidden; }
-        .sidebar.collapsed .sidebar-content { opacity: 0; pointer-events: none; }
+        /* 自定义滚动条 */
+        .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .custom-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-        /* 控制舱折叠 */
-        .control-deck { transition: all 0.3s ease; }
-        .control-deck.collapsed { max-height: 48px !important; overflow: hidden; }
+        /* 视图切换动画 */
+        .view-transition { transition: opacity 0.4s ease, transform 0.4s ease; }
+        .view-hidden { opacity: 0; pointer-events: none; position: absolute; inset: 0; }
+
+        /* 设置 Modal */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); z-index: 100; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+        .modal-overlay.show { opacity: 1; pointer-events: auto; }
+        .modal-box { background: white; border-radius: 16px; width: 90%; max-width: 520px; box-shadow: 0 25px 50px rgba(0,0,0,0.25); transform: scale(0.95) translateY(10px); transition: transform 0.3s; }
+        .modal-overlay.show .modal-box { transform: scale(1) translateY(0); }
 
         /* 画幅选择器 */
-        .ar-option { transition: all 0.2s; }
-        .ar-option.selected { background: #4f46e5; color: white; border-color: #4f46e5; }
-        .ar-option:not(.selected):hover { border-color: #818cf8; background: #eef2ff; }
+        .ar-option { transition: all 0.2s; position: relative; overflow: hidden; }
+        .ar-option::before { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); opacity: 0; transition: opacity 0.2s; }
+        .ar-option.selected::before { opacity: 1; }
+        .ar-option.selected { color: white; border-color: #4f46e5; }
+        .ar-option:not(.selected):hover { border-color: #818cf8; transform: translateY(-1px); }
+
+        /* 加载动画 */
+        .spinner { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Toast */
+        .toast { position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%) translateY(100px); padding: 12px 24px; background: #1e293b; border-radius: 12px; color: white; font-size: 14px; font-weight: 500; z-index: 1000; opacity: 0; transition: all 0.3s ease; box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
+        .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+        /* 图片预览 */
+        .img-thumb { position: relative; width: 56px; height: 56px; border-radius: 12px; overflow: hidden; border: 2px solid #e2e8f0; transition: all 0.2s; }
+        .img-thumb:hover { border-color: #818cf8; transform: scale(1.05); }
+        .img-thumb img { width: 100%; height: 100%; object-fit: cover; }
+        .img-thumb .overlay { position: absolute; inset: 0; background: rgba(239,68,68,0.85); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; cursor: pointer; }
+        .img-thumb:hover .overlay { opacity: 1; }
+
+        /* 复制按钮成功状态 */
+        .copy-btn { transition: all 0.2s; }
+        .copy-btn.success { background: #10b981 !important; }
+
+        /* Console 深色表格 */
+        .console-dark { background: #0f172a; border-radius: 16px; overflow: hidden; }
+        .console-dark table { width: 100%; border-collapse: collapse; }
+        .console-dark table th { background: #1e293b; padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #334155; }
+        .console-dark table td { padding: 16px; border-bottom: 1px solid #1e293b; vertical-align: top; color: #e2e8f0; line-height: 1.6; }
+        .console-dark table tr:last-child td { border-bottom: none; }
+        .console-dark table tr:hover td { background: #1a2438; }
 
         /* 提示词悬浮 */
-        .prompt-tip { cursor: help; border-bottom: 1px dashed #94a3b8; transition: color 0.2s; }
-        .prompt-tip:hover { color: #60a5fa; border-color: #60a5fa; }
+        .prompt-span { cursor: pointer; border-bottom: 1px dashed #64748b; transition: color 0.2s, border-color 0.2s; }
+        .prompt-span:hover { color: #818cf8; border-color: #818cf8; }
 
-        /* 表格单元格 */
-        .prompt-cell { position: relative; }
-        .prompt-cell:hover .cell-actions { opacity: 1; }
-        .cell-actions { position: absolute; top: 4px; right: 4px; display: flex; gap: 4px; opacity: 0; transition: opacity 0.2s; }
-        .cell-actions button { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; transition: transform 0.15s; }
+        /* 单元格操作按钮 */
+        .cell-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; opacity: 0; transition: opacity 0.2s; }
+        .cell-actions button { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
         .cell-actions button:hover { transform: scale(1.1); }
         .btn-copy { background: #3b82f6; }
         .btn-copy:hover { background: #2563eb; }
         .btn-expand { background: #8b5cf6; }
         .btn-expand:hover { background: #7c3aed; }
 
+        .prompt-cell { position: relative; }
+        .prompt-cell:hover .cell-actions { opacity: 1; }
+
         /* 历史项 */
-        .history-item.active { background: #334155 !important; }
-        .history-item.active .history-name { color: #f1f5f9 !important; }
+        .history-item { transition: all 0.2s; }
+        .history-item:hover { background: #f1f5f9; }
+        .history-item.active { background: #eef2ff !important; }
+        .history-item.active .history-name { color: #4f46e5 !important; font-weight: 600; }
 
-        /* 加载 */
-        .spinner { width: 18px; height: 18px; border: 2px solid #475569; border-top-color: #06b6d4; border-radius: 50%; animation: spin 0.8s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
+        /* 打字机光标 */
+        .typewriter-cursor { display: inline-block; width: 2px; height: 1em; background: #4f46e5; margin-left: 2px; animation: blink 1s infinite; }
+        @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
 
-        /* Toast */
-        .toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; background: #1e293b; border: 1px solid #334155; border-radius: 10px; color: #e2e8f0; font-size: 14px; z-index: 1000; transform: translateY(80px); opacity: 0; transition: all 0.3s ease; box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
-        .toast.show { transform: translateY(0); opacity: 1; }
+        /* 输入框聚焦 */
+        input:focus, textarea:focus { outline: none; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15); }
 
-        /* 滚动条 */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-
-        /* 图片预览 */
-        .img-thumb { position: relative; width: 52px; height: 52px; border-radius: 8px; overflow: hidden; border: 2px solid #e2e8f0; flex-shrink: 0; }
-        .img-thumb img { width: 100%; height: 100%; object-fit: cover; }
-        .img-thumb .del { position: absolute; inset: 0; background: rgba(239,68,68,0.8); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; cursor: pointer; }
-        .img-thumb:hover .del { opacity: 1; }
-
-        /* Modal */
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(6px); z-index: 50; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.25s; }
-        .modal-overlay.show { opacity: 1; pointer-events: auto; }
-        .modal-box { background: #1e293b; border: 1px solid #334155; border-radius: 16px; width: 90%; max-width: 900px; max-height: 80vh; overflow: hidden; transform: scale(0.92); transition: transform 0.25s; }
-        .modal-overlay.show .modal-box { transform: scale(1); }
+        /* 标签页样式 */
+        .tab-active { background: white !important; color: #4f46e5 !important; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
     </style>
 </head>
 <body class="bg-slate-50">
-    <!-- 全屏布局 -->
     <div class="flex h-screen w-screen overflow-hidden">
-
         <!-- ==================== 左侧边栏 ==================== -->
-        <aside id="sidebar" class="sidebar w-64 bg-slate-900 flex flex-col flex-shrink-0 border-r border-slate-700">
-            <div class="sidebar-content flex flex-col h-full">
-                <div class="p-4 border-b border-slate-700">
-                    <div class="flex items-center gap-3">
-                        <div class="w-9 h-9 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-                            </svg>
-                        </div>
-                        <div class="min-w-0">
-                            <h1 class="text-sm font-bold text-white truncate">制片工作台</h1>
-                            <p class="text-[10px] text-slate-500">AI Storyboard Studio</p>
-                        </div>
+        <aside class="w-[280px] bg-white border-r border-slate-200 flex flex-col flex-shrink-0">
+            <!-- Logo -->
+            <div class="p-5 border-b border-slate-100">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="text-base font-bold text-slate-800">制片工作台</h1>
+                        <p class="text-xs text-slate-400">AI Storyboard Studio</p>
                     </div>
                 </div>
+                <button onclick="createNewProject()" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    新建项目
+                </button>
+            </div>
 
-                <div class="p-3 border-b border-slate-700">
-                    <button onclick="createNewProject()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-sm py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-colors">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                        新建项目
-                    </button>
-                </div>
+            <!-- 历史列表 -->
+            <div class="flex-1 overflow-y-auto custom-scroll p-3">
+                <div class="text-[10px] text-slate-400 uppercase tracking-widest font-semibold mb-2 px-2">历史记录</div>
+                <div id="historyList" class="space-y-1"></div>
+            </div>
 
-                <div class="flex-1 overflow-y-auto p-3">
-                    <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-2 px-1">历史记录</div>
-                    <div id="historyList" class="space-y-1"></div>
-                </div>
-
-                <div class="p-3 border-t border-slate-700">
-                    <button onclick="toggleSidebar()" class="w-full flex items-center justify-center gap-2 text-slate-500 hover:text-white py-1 text-xs transition-colors">
-                        <svg id="collapseIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path></svg>
-                        <span>折叠侧边栏</span>
-                    </button>
-                </div>
+            <!-- 底部版权 -->
+            <div class="p-3 border-t border-slate-100 text-center">
+                <p class="text-xs text-slate-400">© 2026 浩涵 All Rights Reserved</p>
             </div>
         </aside>
 
         <!-- ==================== 右侧主区域 ==================== -->
-        <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <main class="flex-1 flex flex-col overflow-hidden relative">
+            <!-- 视图 A: 输入页 -->
+            <div id="inputView" class="view-transition flex-1 flex flex-col overflow-hidden">
+                <div class="flex-1 overflow-y-auto custom-scroll p-8">
+                    <div class="max-w-4xl mx-auto space-y-6">
+                        <!-- 标题 -->
+                        <div class="text-center mb-8">
+                            <h2 class="text-2xl font-bold text-slate-800 mb-2">创建您的分镜脚本</h2>
+                            <p class="text-slate-500">上传产品图 → 提取特征 → 生成专业脚本</p>
+                        </div>
 
-            <!-- 控制舱 -->
-            <div id="controlDeck" class="control-deck bg-white border-b border-slate-200 p-4 max-h-[240px] overflow-hidden">
-                <div class="flex gap-4">
-                    <!-- Phase 1 -->
-                    <div class="flex-1 min-w-0 border border-slate-200 rounded-xl p-4">
-                        <div class="flex items-center gap-2 mb-3">
-                            <div class="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-bold">1</div>
-                            <span class="text-sm font-semibold text-slate-800">产品资产锚定</span>
-                        </div>
-                        <div class="flex gap-3 items-start">
-                            <div class="flex-1 min-w-0 space-y-2">
-                                <input type="text" id="projectName" class="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:border-indigo-500 outline-none" placeholder="项目名称">
-                                <textarea id="anchorPrompt" rows="2" class="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:border-indigo-500 outline-none resize-none font-mono" placeholder="锚定词..."></textarea>
-                            </div>
-                            <div class="w-20 flex-shrink-0">
-                                <button onclick="analyzeProduct()" id="analyzeBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-sm py-2 px-3 rounded-lg transition-colors whitespace-nowrap">
-                                    提取特征
-                                </button>
-                            </div>
-                        </div>
-                        <div class="mt-2">
-                            <div id="uploadZone1" class="inline-block border-2 border-dashed border-slate-200 rounded-lg p-2 text-center hover:border-indigo-400 cursor-pointer transition-colors">
-                                <input type="file" id="productImages" multiple accept="image/*" class="hidden">
-                                <div class="flex items-center gap-2">
-                                    <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                                    <span class="text-xs text-slate-400">上传图片</span>
+                        <!-- Phase 1: 资产锚定 -->
+                        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div class="px-6 py-4 bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white font-bold">1</div>
+                                <div>
+                                    <h3 class="text-white font-semibold">产品资产锚定</h3>
+                                    <p class="text-white/70 text-xs">提取产品视觉特征作为锚定词</p>
                                 </div>
                             </div>
-                            <div id="imagePreviewGrid" class="inline-flex gap-1.5 ml-2 align-middle"></div>
-                        </div>
-                    </div>
-
-                    <div class="w-px bg-slate-200 self-stretch"></div>
-
-                    <!-- Phase 2 -->
-                    <div class="flex-1 min-w-0 border border-slate-200 rounded-xl p-4">
-                        <div class="flex items-center gap-2 mb-3">
-                            <div class="w-6 h-6 rounded-full bg-purple-600 text-white text-xs flex items-center justify-center font-bold">2</div>
-                            <span class="text-sm font-semibold text-slate-800">分镜脚本生成</span>
-                        </div>
-
-                        <!-- 画幅比例选择器 -->
-                        <div class="mb-3">
-                            <label class="block text-xs text-slate-500 mb-1.5">画幅比例 (Aspect Ratio)</label>
-                            <div class="flex gap-2">
-                                <div class="ar-option flex-1 flex flex-col items-center gap-1 p-2 border-2 border-slate-200 rounded-lg cursor-pointer selected" data-value="16:9" onclick="selectAR(this)">
-                                    <svg class="w-8 h-5 text-current opacity-70" viewBox="0 0 32 20" fill="none" stroke="currentColor" stroke-width="1.5">
-                                        <rect x="1" y="1" width="30" height="18" rx="2"/>
-                                    </svg>
-                                    <span class="text-[10px] font-medium">16:9</span>
-                                    <span class="text-[9px] opacity-60">横屏电影</span>
+                            <div class="p-6 space-y-4">
+                                <!-- 项目名称 -->
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-2">项目名称</label>
+                                    <input type="text" id="projectName" class="w-full px-4 py-3 border border-slate-200 rounded-xl focus:border-indigo-500 transition-colors" placeholder="例如：智能手表产品视频">
                                 </div>
-                                <div class="ar-option flex-1 flex flex-col items-center gap-1 p-2 border-2 border-slate-200 rounded-lg cursor-pointer" data-value="9:16" onclick="selectAR(this)">
-                                    <svg class="w-5 h-8 text-current opacity-70" viewBox="0 0 20 32" fill="none" stroke="currentColor" stroke-width="1.5">
-                                        <rect x="1" y="1" width="18" height="30" rx="2"/>
-                                    </svg>
-                                    <span class="text-[10px] font-medium">9:16</span>
-                                    <span class="text-[9px] opacity-60">竖屏手机</span>
-                                </div>
-                            </div>
-                        </div>
 
-                        <div class="flex gap-3 items-center">
-                            <div class="flex-1 min-w-0">
-                                <div id="uploadZone2" class="border-2 border-dashed border-slate-200 rounded-lg p-3 text-center hover:border-purple-400 cursor-pointer transition-colors">
-                                    <input type="file" id="requirementsFile" accept=".csv,.xlsx,.xls" class="hidden">
-                                    <div class="flex items-center justify-center gap-2">
-                                        <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                                        <span class="text-xs text-slate-400">上传需求表</span>
+                                <!-- 产品图片 -->
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-2">产品图片（最多5张）</label>
+                                    <div id="uploadZone1" class="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-indigo-400 hover:bg-indigo-50/30 cursor-pointer transition-all">
+                                        <input type="file" id="productImages" multiple accept="image/*" class="hidden">
+                                        <div class="flex flex-col items-center gap-2">
+                                            <div class="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
+                                                <svg class="w-6 h-6 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                            </div>
+                                            <div>
+                                                <p class="text-sm font-medium text-slate-600">点击或拖拽上传图片</p>
+                                                <p class="text-xs text-slate-400 mt-1">支持 JPG, PNG 格式</p>
+                                            </div>
+                                        </div>
                                     </div>
+                                    <div id="imagePreviewGrid" class="flex gap-3 mt-3 flex-wrap"></div>
                                 </div>
-                                <div id="fileInfo" class="hidden mt-1.5 p-1.5 bg-slate-50 rounded-lg flex items-center gap-2">
-                                    <span id="fileName" class="text-xs text-slate-600 truncate flex-1"></span>
-                                    <button onclick="removeFile()" class="text-slate-400 hover:text-red-500">
-                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+
+                                <!-- 提取按钮 -->
+                                <button onclick="analyzeProduct()" id="analyzeBtn" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold py-3 px-6 rounded-xl flex items-center justify-center gap-2 transition-all">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+                                    提取产品特征
+                                </button>
+
+                                <!-- 锚定词 -->
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-2">锚定描述词</label>
+                                    <div class="relative">
+                                        <textarea id="anchorPrompt" rows="3" class="w-full px-4 py-3 border border-slate-200 rounded-xl focus:border-indigo-500 transition-colors resize-none font-mono text-sm" placeholder="提取后将显示产品特征描述..."></textarea>
+                                        <span id="anchorCursor" class="typewriter-cursor absolute hidden" style="top: 12px; left: 16px;"></span>
+                                    </div>
+                                    <button onclick="useAnchorPrompt()" id="useAnchorBtn" class="mt-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium hidden flex items-center gap-1">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path></svg>
+                                        使用此锚定词继续生成
                                     </button>
                                 </div>
                             </div>
-                            <button onclick="generateScript()" id="generateBtn" class="bg-purple-600 hover:bg-purple-700 text-white text-sm py-2.5 px-6 rounded-lg transition-colors flex items-center gap-2 flex-shrink-0">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                                生成脚本
-                            </button>
                         </div>
-                        <div class="mt-2 flex items-center justify-between">
-                            <span id="arStatusText" class="text-xs text-slate-400">当前: 16:9 横屏</span>
-                            <button id="expandBtn" onclick="expandControlDeck()" class="hidden text-xs text-indigo-600 hover:text-indigo-800">展开配置</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
-            <!-- 沉浸式表格区 -->
-            <div class="flex-1 overflow-hidden p-4 bg-slate-50">
-                <div class="h-full bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
-                    <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between flex-shrink-0 bg-slate-50">
-                        <div class="flex items-center gap-2">
-                            <div class="flex gap-1.5">
-                                <div class="w-2.5 h-2.5 rounded-full bg-red-400"></div>
-                                <div class="w-2.5 h-2.5 rounded-full bg-yellow-400"></div>
-                                <div class="w-2.5 h-2.5 rounded-full bg-green-400"></div>
+                        <!-- Phase 2: 分镜生成 -->
+                        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div class="px-6 py-4 bg-gradient-to-r from-purple-500 to-pink-500 flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white font-bold">2</div>
+                                <div>
+                                    <h3 class="text-white font-semibold">分镜脚本生成</h3>
+                                    <p class="text-white/70 text-xs">上传需求表，生成专业分镜</p>
+                                </div>
                             </div>
-                            <span class="text-sm text-slate-500 font-mono">Storyboard Console</span>
-                        </div>
-                        <div class="flex items-center gap-4 text-xs text-slate-400">
-                            <span id="statusText">就绪</span>
-                            <span id="charCount">0 chars</span>
-                            <button onclick="copyConsole()" class="hover:text-indigo-600 transition-colors">复制</button>
-                            <button onclick="downloadConsole()" class="hover:text-indigo-600 transition-colors">下载</button>
-                        </div>
-                    </div>
+                            <div class="p-6 space-y-4">
+                                <!-- 画幅选择 -->
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-2">画幅比例</label>
+                                    <div class="flex gap-3">
+                                        <div class="ar-option flex-1 p-4 border-2 border-slate-200 rounded-xl cursor-pointer selected" data-value="16:9" onclick="selectAR(this)">
+                                            <div class="relative z-10 flex flex-col items-center gap-2">
+                                                <svg class="w-10 h-6 text-current opacity-80" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="38" height="22" rx="3"/></svg>
+                                                <span class="text-sm font-semibold">16:9</span>
+                                                <span class="text-xs opacity-70">横屏电影</span>
+                                            </div>
+                                        </div>
+                                        <div class="ar-option flex-1 p-4 border-2 border-slate-200 rounded-xl cursor-pointer" data-value="9:16" onclick="selectAR(this)">
+                                            <div class="relative z-10 flex flex-col items-center gap-2">
+                                                <svg class="w-6 h-10 text-current opacity-80" viewBox="0 0 24 40" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="22" height="38" rx="3"/></svg>
+                                                <span class="text-sm font-semibold">9:16</span>
+                                                <span class="text-xs opacity-70">竖屏手机</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
 
-                    <div id="console" class="flex-1 overflow-auto p-6 font-mono text-sm">
-                        <div class="text-center text-slate-400 py-20">
-                            <svg class="w-16 h-16 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                            </svg>
-                            <p class="text-base font-medium">等待生成指令</p>
-                            <p class="text-sm mt-1 text-slate-400">上传产品图 → 提取特征 → 选择画幅 → 生成脚本</p>
+                                <!-- 需求表上传 -->
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-2">镜头需求表</label>
+                                    <div id="uploadZone2" class="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-purple-400 hover:bg-purple-50/30 cursor-pointer transition-all">
+                                        <input type="file" id="requirementsFile" accept=".csv,.xlsx,.xls" class="hidden">
+                                        <div class="flex flex-col items-center gap-2">
+                                            <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+                                                <svg class="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                            </div>
+                                            <div>
+                                                <p class="text-sm font-medium text-slate-600">点击上传需求表</p>
+                                                <p class="text-xs text-slate-400 mt-1">支持 CSV, Excel 格式</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div id="fileInfo" class="hidden mt-3 p-3 bg-purple-50 rounded-xl flex items-center gap-3">
+                                        <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                                            <svg class="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <p id="fileName" class="text-sm font-medium text-slate-700 truncate"></p>
+                                            <p class="text-xs text-slate-400">已选择</p>
+                                        </div>
+                                        <button onclick="removeFile()" class="text-slate-400 hover:text-red-500 transition-colors">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- 生成按钮 -->
+                                <button onclick="generateScript()" id="generateBtn" class="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold py-3 px-6 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                                    生成专业脚本
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
+
+            <!-- 视图 B: 生成页 (Console) -->
+            <div id="consoleView" class="view-transition view-hidden flex-1 flex flex-col overflow-hidden">
+                <!-- 顶部工具栏 -->
+                <div class="px-6 py-4 border-b border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
+                    <div class="flex items-center gap-3">
+                        <div class="flex gap-1.5">
+                            <div class="w-3 h-3 rounded-full bg-red-400"></div>
+                            <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
+                            <div class="w-3 h-3 rounded-full bg-green-400"></div>
+                        </div>
+                        <span class="text-sm text-slate-500 font-mono">Storyboard Console</span>
+                        <span id="arBadge" class="px-2 py-0.5 bg-indigo-100 text-indigo-600 text-xs font-medium rounded-full">16:9</span>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <span id="statusText" class="text-xs text-slate-400">就绪</span>
+                        <span id="charCount" class="text-xs text-slate-400">0 chars</span>
+                        <button onclick="copyConsole()" class="text-xs text-slate-500 hover:text-indigo-600 transition-colors">复制</button>
+                        <button onclick="downloadConsole()" class="text-xs text-slate-500 hover:text-indigo-600 transition-colors">下载</button>
+                        <button onclick="switchToInput()" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-medium rounded-lg transition-colors">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                            修改配置
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Console 内容 -->
+                <div class="flex-1 overflow-y-auto custom-scroll p-6 bg-slate-50">
+                    <div id="console" class="console-dark p-6 min-h-full">
+                        <div class="text-center text-slate-400 py-20">
+                            <div class="w-16 h-16 mx-auto bg-slate-800 rounded-2xl flex items-center justify-center mb-4">
+                                <div class="spinner"></div>
+                            </div>
+                            <p class="text-lg font-medium text-slate-300">正在生成...</p>
+                            <p class="text-sm mt-2 text-slate-500">请稍候，分镜脚本生成中</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
     </div>
 
-    <!-- Modal -->
-    <div id="modal" class="modal-overlay" onclick="closeModal(event)">
-        <div class="modal-box" onclick="event.stopPropagation()">
-            <div class="p-4 border-b border-slate-700 flex items-center justify-between">
-                <h3 class="text-white font-semibold">提示词详情</h3>
-                <button onclick="closeModal()" class="text-slate-400 hover:text-white">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+    <!-- 详情 Modal -->
+    <div id="detailModal" class="modal-overlay" onclick="closeDetail(event)">
+        <div class="modal-box" onclick="event.stopPropagation()" style="max-width: 900px;">
+            <div class="p-5 border-b border-slate-200 flex items-center justify-between">
+                <h3 class="text-lg font-bold text-slate-800">提示词详情</h3>
+                <button onclick="closeDetail()" class="text-slate-400 hover:text-slate-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
             </div>
-            <div class="p-5 max-h-[55vh] overflow-y-auto">
+            <div class="p-6 max-h-[55vh] overflow-y-auto custom-scroll">
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-xs text-slate-500 mb-2 uppercase tracking-wider">English</label>
-                        <div id="modalEnglish" class="bg-slate-800 p-4 rounded-xl font-mono text-cyan-300 leading-relaxed"></div>
+                        <label class="block text-xs text-slate-500 mb-2 uppercase tracking-wider font-semibold">English Prompt</label>
+                        <div id="detailEnglish" class="bg-slate-900 p-5 rounded-xl font-mono text-cyan-300 leading-relaxed text-sm"></div>
                     </div>
                     <div>
-                        <label class="block text-xs text-slate-500 mb-2 uppercase tracking-wider">中文</label>
-                        <div id="modalChinese" class="bg-slate-800 p-4 rounded-xl text-slate-300 leading-relaxed"></div>
+                        <label class="block text-xs text-slate-500 mb-2 uppercase tracking-wider font-semibold">中文翻译</label>
+                        <div id="detailChinese" class="bg-slate-900 p-5 rounded-xl text-slate-300 leading-relaxed text-sm"></div>
                     </div>
                 </div>
             </div>
-            <div class="p-4 border-t border-slate-700 flex gap-3">
-                <button onclick="copyModalAll()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-lg font-medium transition-colors">复制全部</button>
-                <button onclick="closeModal()" class="px-6 py-2.5 border border-slate-600 text-slate-300 hover:bg-slate-700 rounded-lg transition-colors">关闭</button>
+            <div class="p-5 border-t border-slate-200 flex gap-3">
+                <button onclick="copyDetailAll()" class="flex-1 px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-colors">复制全部</button>
+                <button onclick="closeDetail()" class="px-6 py-3 border border-slate-200 text-slate-600 font-medium rounded-xl hover:bg-slate-50 transition-colors">关闭</button>
             </div>
         </div>
     </div>
@@ -277,9 +346,9 @@
         let uploadedImages = [];
         let currentProjectId = null;
         let accumulatedContent = '';
-        let currentModalEN = '';
-        let currentModalCN = '';
         let selectedAR = '16:9';
+        let currentDetailEN = '';
+        let currentDetailCN = '';
 
         // ==================== 初始化 ====================
         document.addEventListener('DOMContentLoaded', () => {
@@ -287,33 +356,16 @@
             setupUploadZones();
         });
 
-        // ==================== 侧边栏 ====================
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const icon = document.getElementById('collapseIcon');
-            sidebar.classList.toggle('collapsed');
-            icon.innerHTML = sidebar.classList.contains('collapsed')
-                ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path>'
-                : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path>';
+        // ==================== 视图切换 ====================
+        function switchToConsole() {
+            document.getElementById('inputView').classList.add('view-hidden');
+            document.getElementById('consoleView').classList.remove('view-hidden');
+            document.getElementById('arBadge').textContent = selectedAR;
         }
 
-        // ==================== 画幅选择 ====================
-        function selectAR(el) {
-            document.querySelectorAll('.ar-option').forEach(opt => opt.classList.remove('selected'));
-            el.classList.add('selected');
-            selectedAR = el.dataset.value;
-            document.getElementById('arStatusText').textContent = `当前: ${selectedAR} ${selectedAR === '16:9' ? '横屏' : '竖屏'}`;
-        }
-
-        // ==================== 控制舱折叠 ====================
-        function collapseControlDeck() {
-            document.getElementById('controlDeck').classList.add('collapsed');
-            document.getElementById('expandBtn').classList.remove('hidden');
-        }
-
-        function expandControlDeck() {
-            document.getElementById('controlDeck').classList.remove('collapsed');
-            document.getElementById('expandBtn').classList.add('hidden');
+        function switchToInput() {
+            document.getElementById('consoleView').classList.add('view-hidden');
+            document.getElementById('inputView').classList.remove('view-hidden');
         }
 
         // ==================== 新建项目 ====================
@@ -324,11 +376,17 @@
             removeFile();
             uploadedImages = [];
             renderImagePreviews();
-            clearConsole();
             clearHistoryHighlight();
-            expandControlDeck();
-            // 重置画幅
+            switchToInput();
+            clearConsole();
             selectAR(document.querySelector('.ar-option[data-value="16:9"]'));
+        }
+
+        // ==================== 画幅选择 ====================
+        function selectAR(el) {
+            document.querySelectorAll('.ar-option').forEach(opt => opt.classList.remove('selected'));
+            el.classList.add('selected');
+            selectedAR = el.dataset.value;
         }
 
         // ==================== 历史记录 ====================
@@ -339,23 +397,16 @@
                 const container = document.getElementById('historyList');
                 if (data.projects && data.projects.length) {
                     container.innerHTML = data.projects.map(p => `
-                        <div class="history-item p-2 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors group" onclick="loadProject(${p.id})" data-id="${p.id}">
-                            <div class="flex items-start justify-between">
-                                <div class="flex-1 min-w-0">
-                                    <p class="history-name text-sm text-slate-400 truncate group-hover:text-slate-300">${escapeHtml(p.project_name)}</p>
-                                    <div class="flex items-center gap-1.5 mt-0.5">
-                                        <span class="text-[9px] text-slate-600">${p.aspect_ratio || '16:9'}</span>
-                                        <span class="text-[10px] text-slate-600">${formatDate(p.updated_at || p.created_at)}</span>
-                                    </div>
-                                </div>
-                                <button onclick="event.stopPropagation(); delProject(${p.id})" class="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                                </button>
+                        <div class="history-item p-3 rounded-xl cursor-pointer" onclick="loadProject(${p.id})" data-id="${p.id}">
+                            <p class="history-name text-sm font-medium text-slate-700 truncate">${escapeHtml(p.project_name)}</p>
+                            <div class="flex items-center gap-2 mt-1">
+                                <span class="px-1.5 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-medium rounded">${p.aspect_ratio || '16:9'}</span>
+                                <span class="text-[10px] text-slate-400">${formatDate(p.updated_at || p.created_at)}</span>
                             </div>
                         </div>
                     `).join('');
                 } else {
-                    container.innerHTML = '<p class="text-xs text-slate-600 text-center py-4">暂无历史</p>';
+                    container.innerHTML = '<p class="text-xs text-slate-400 text-center py-8">暂无历史项目</p>';
                 }
             } catch (err) { console.error(err); }
         }
@@ -389,7 +440,7 @@
                 if (file.type.startsWith('image/')) {
                     const compressed = await compressImageFile(file);
                     const reader = new FileReader();
-                    reader.onload = e => { uploadedImages.push({ file: compressed, preview: e.target.result, name: file.name }); renderImagePreviews(); };
+                    reader.onload = e => { uploadedImages.push({ file: compressed, preview: e.target.result }); renderImagePreviews(); };
                     reader.readAsDataURL(compressed);
                 }
             }
@@ -416,8 +467,8 @@
             grid.innerHTML = uploadedImages.map((img, i) => `
                 <div class="img-thumb">
                     <img src="${img.preview}" alt="">
-                    <div class="del" onclick="removeImage(${i})">
-                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    <div class="overlay" onclick="removeImage(${i})">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </div>
                 </div>
             `).join('');
@@ -435,15 +486,45 @@
             document.getElementById('fileInfo').classList.add('hidden');
         }
 
-        // ==================== 阶段一 ====================
+        // ==================== 阶段一：产品分析（流式打字机） ====================
+        let typewriterTimer = null;
+        let typewriterText = '';
+        let typewriterIndex = 0;
+
+        function startTypewriter(text) {
+            typewriterText = text;
+            typewriterIndex = 0;
+            const textarea = document.getElementById('anchorPrompt');
+            textarea.value = '';
+            document.getElementById('anchorCursor').classList.remove('hidden');
+            document.getElementById('useAnchorBtn').classList.add('hidden');
+
+            function type() {
+                if (typewriterIndex < typewriterText.length) {
+                    textarea.value += typewriterText.charAt(typewriterIndex);
+                    typewriterIndex++;
+                    typewriterTimer = setTimeout(type, 15);
+                } else {
+                    document.getElementById('anchorCursor').classList.add('hidden');
+                    document.getElementById('useAnchorBtn').classList.remove('hidden');
+                }
+            }
+            type();
+        }
+
+        function useAnchorPrompt() {
+            showToast('锚定词已锁定');
+        }
+
         async function analyzeProduct() {
             const productName = document.getElementById('projectName').value.trim() || '未命名';
             const btn = document.getElementById('analyzeBtn');
-            if (uploadedImages.length === 0) { showToast('请先上传产品图片'); return; }
+
+            if (uploadedImages.length === 0) { showToast('请上传产品图片'); return; }
 
             btn.disabled = true;
-            btn.innerHTML = '<div class="spinner"></div>';
-            setStatus('分析中...');
+            btn.innerHTML = '<div class="spinner"></div> 分析中...';
+            clearTimeout(typewriterTimer);
 
             const formData = new FormData();
             formData.append('product_name', productName);
@@ -451,22 +532,54 @@
 
             try {
                 const res = await fetch('/api/analyze_product', { method: 'POST', body: formData });
-                const data = await res.json();
-                if (data.success) {
-                    document.getElementById('anchorPrompt').value = data.anchor_prompt;
-                    currentProjectId = data.project_id;
-                    showToast('特征提取成功');
-                    setStatus('锚定完成');
-                    loadHistory();
-                } else {
-                    showToast(data.error || '分析失败');
-                    setStatus('分析失败');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let fullText = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    const chunk = decoder.decode(value, { stream: true });
+                    for (const line of chunk.split('\n')) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                if (data.type === 'chunk') {
+                                    fullText = data.accumulated;
+                                    startTypewriter(fullText);
+                                } else if (data.type === 'done') {
+                                    btn.disabled = false;
+                                    btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg> 提取产品特征';
+                                    showToast('特征提取完成');
+
+                                    // 保存项目
+                                    fetch('/api/analyze_product/save', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ anchor_prompt: fullText, product_name: productName })
+                                    })
+                                    .then(r => r.json())
+                                    .then(data => { if (data.success) currentProjectId = data.project_id; });
+                                } else if (data.type === 'error') {
+                                    showToast('错误: ' + data.message);
+                                    btn.disabled = false;
+                                    btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg> 提取产品特征';
+                                }
+                            } catch (e) {}
+                        }
+                    }
                 }
-            } catch (err) { console.error(err); showToast('网络错误'); setStatus('分析失败'); }
-            finally { btn.disabled = false; btn.innerHTML = '提取特征'; }
+            } catch (err) {
+                console.error(err);
+                showToast('网络错误');
+                btn.disabled = false;
+                btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg> 提取产品特征';
+            }
         }
 
-        // ==================== 阶段二 ====================
+        // ==================== 阶段二：分镜生成 ====================
         async function generateScript() {
             const anchorPrompt = document.getElementById('anchorPrompt').value.trim();
             const reqFile = document.getElementById('requirementsFile').files[0];
@@ -476,13 +589,11 @@
 
             btn.disabled = true;
             btn.innerHTML = '<div class="spinner"></div> 生成中...';
-            setStatus(`生成中 [${selectedAR}]...`);
-
-            collapseControlDeck();
+            switchToConsole();
 
             accumulatedContent = '';
-            document.getElementById('console').innerHTML = '';
-            document.getElementById('charCount').textContent = '0';
+            clearConsole();
+            setStatus('生成中...');
 
             const formData = new FormData();
             formData.append('anchor_prompt', anchorPrompt);
@@ -509,11 +620,10 @@
                 }
             } catch (err) {
                 console.error(err);
-                showToast('生成失败: ' + err.message);
+                showToast('生成失败');
                 setStatus('生成失败');
-                expandControlDeck();
                 btn.disabled = false;
-                btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg> 生成脚本';
+                btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg> 生成专业脚本';
             }
         }
 
@@ -524,7 +634,7 @@
 
             switch (data.type) {
                 case 'start':
-                    consoleEl.innerHTML = '';
+                    consoleEl.innerHTML = '<div class="text-center py-20"><div class="w-12 h-12 mx-auto bg-slate-800 rounded-xl flex items-center justify-center mb-4"><div class="spinner"></div></div><p class="text-slate-300">正在生成...</p></div>';
                     setStatus(data.message);
                     break;
                 case 'chunk':
@@ -539,17 +649,16 @@
                     showToast('脚本生成完成');
                     loadHistory();
                     btn.disabled = false;
-                    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg> 生成脚本';
+                    btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg> 生成专业脚本';
                     break;
                 case 'error':
                     setStatus('生成失败');
                     showToast('错误: ' + data.message);
-                    expandControlDeck();
                     btn.disabled = false;
-                    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg> 生成脚本';
+                    btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg> 生成专业脚本';
                     break;
                 case 'saved':
-                    showToast('已保存');
+                    showToast('已保存到历史');
                     break;
             }
         }
@@ -568,13 +677,14 @@
                                 const actions = document.createElement('div');
                                 actions.className = 'cell-actions';
                                 actions.innerHTML = `
-                                    <button class="btn-copy" onclick="copyCellText(this)" title="复制">
-                                        <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                                    <button class="btn-copy copy-btn" onclick="copyCellText(this)" title="复制">
+                                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
                                     </button>
                                     <button class="btn-expand" onclick="expandCell(this)" title="放大">
-                                        <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg>
+                                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg>
                                     </button>`;
                                 cell.appendChild(actions);
+
                                 cell.querySelectorAll('[title^="中文翻译"]').forEach(span => {
                                     span.addEventListener('click', () => expandFromSpan(span));
                                 });
@@ -589,7 +699,15 @@
             const cell = btn.closest('td');
             const temp = document.createElement('div');
             temp.innerHTML = cell.innerHTML;
-            navigator.clipboard.writeText(temp.textContent.trim()).then(() => showToast('复制成功')).catch(() => showToast('复制失败'));
+            navigator.clipboard.writeText(temp.textContent.trim()).then(() => {
+                btn.classList.add('success');
+                btn.innerHTML = '<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
+                showToast('已复制');
+                setTimeout(() => {
+                    btn.classList.remove('success');
+                    btn.innerHTML = '<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>';
+                }, 2000);
+            });
         }
 
         function expandCell(btn) { showModalFromCell(btn.closest('td')); }
@@ -605,17 +723,17 @@
             });
             if (!english) english = temp.textContent.trim();
 
-            document.getElementById('modalEnglish').textContent = english;
-            document.getElementById('modalChinese').textContent = chinese;
-            currentModalEN = english;
-            currentModalCN = chinese;
-            document.getElementById('modal').classList.add('show');
+            document.getElementById('detailEnglish').textContent = english;
+            document.getElementById('detailChinese').textContent = chinese;
+            currentDetailEN = english;
+            currentDetailCN = chinese;
+            document.getElementById('detailModal').classList.add('show');
         }
 
-        function closeModal(e) { if (!e || e.target === document.getElementById('modal')) document.getElementById('modal').classList.remove('show'); }
+        function closeDetail(e) { if (!e || e.target === document.getElementById('detailModal')) document.getElementById('detailModal').classList.remove('show'); }
 
-        function copyModalAll() {
-            navigator.clipboard.writeText(`英文：\n${currentModalEN}\n\n中文：\n${currentModalCN}`).then(() => showToast('已复制')).catch(() => showToast('复制失败'));
+        function copyDetailAll() {
+            navigator.clipboard.writeText(`English:\n${currentDetailEN}\n\n中文:\n${currentDetailCN}`).then(() => showToast('已复制'));
         }
 
         // ==================== 控制台 ====================
@@ -623,20 +741,13 @@
 
         function clearConsole() {
             accumulatedContent = '';
-            document.getElementById('console').innerHTML = `
-                <div class="text-center text-slate-400 py-20">
-                    <svg class="w-16 h-16 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                    </svg>
-                    <p class="text-base font-medium">等待生成指令</p>
-                    <p class="text-sm mt-1 text-slate-400">上传产品图 → 提取特征 → 选择画幅 → 生成脚本</p>
-                </div>`;
+            document.getElementById('console').innerHTML = '<div class="text-center py-20"><div class="w-16 h-16 mx-auto bg-slate-800 rounded-2xl flex items-center justify-center mb-4"><div class="spinner"></div></div><p class="text-lg font-medium text-slate-300">正在生成...</p><p class="text-sm mt-2 text-slate-500">请稍候</p></div>';
             document.getElementById('charCount').textContent = '0';
             setStatus('就绪');
         }
 
         function copyConsole() {
-            if (accumulatedContent) navigator.clipboard.writeText(accumulatedContent).then(() => showToast('已复制')).catch(() => showToast('复制失败'));
+            if (accumulatedContent) navigator.clipboard.writeText(accumulatedContent).then(() => showToast('已复制'));
         }
 
         function downloadConsole() {
@@ -660,30 +771,27 @@
                     const p = data.project;
                     document.getElementById('projectName').value = p.product_name || '';
                     document.getElementById('anchorPrompt').value = p.anchor_prompt || '';
+                    document.getElementById('useAnchorBtn').classList.remove('hidden');
                     currentProjectId = p.id;
 
-                    // 恢复画幅选择
                     const ar = p.aspect_ratio || '16:9';
                     selectedAR = ar;
-                    document.querySelectorAll('.ar-option').forEach(opt => {
-                        opt.classList.toggle('selected', opt.dataset.value === ar);
-                    });
-                    document.getElementById('arStatusText').textContent = `当前: ${ar} ${ar === '16:9' ? '横屏' : '竖屏'}`;
+                    selectAR(document.querySelector(`.ar-option[data-value="${ar}"]`));
 
                     clearHistoryHighlight();
                     document.querySelector(`.history-item[data-id="${p.id}"]`)?.classList.add('active');
 
                     if (p.storyboard_content) {
                         accumulatedContent = p.storyboard_content;
+                        switchToConsole();
                         const consoleEl = document.getElementById('console');
                         consoleEl.innerHTML = marked.parse(accumulatedContent);
                         document.getElementById('charCount').textContent = accumulatedContent.length;
                         injectPromptActions(consoleEl);
-                        collapseControlDeck();
                         setStatus('已加载项目');
                         consoleEl.scrollTop = 0;
                     } else {
-                        clearConsole();
+                        switchToInput();
                     }
                     showToast('已加载: ' + p.project_name);
                 }
@@ -698,7 +806,7 @@
                 if (data.success) {
                     showToast('已删除');
                     loadHistory();
-                    if (currentProjectId === projectId) { clearConsole(); currentProjectId = null; }
+                    if (currentProjectId === projectId) { currentProjectId = null; switchToInput(); clearConsole(); }
                 }
             } catch (err) { showToast('删除失败'); }
         }
