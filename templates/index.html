@@ -3,499 +3,286 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 商业视频制片工作台 | Storyboard Studio</title>
+    <title>AI 商业视频制片工作台</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Inter', 'system-ui', 'sans-serif'],
-                    },
-                    colors: {
-                        primary: {
-                            50: '#f0f9ff',
-                            100: '#e0f2fe',
-                            200: '#bae6fd',
-                            300: '#7dd3fc',
-                            400: '#38bdf8',
-                            500: '#0ea5e9',
-                            600: '#0284c7',
-                            700: '#0369a1',
-                            800: '#075985',
-                            900: '#0c4a6e',
-                        },
-                        dark: {
-                            850: '#1a1d24',
-                            900: '#13151b',
-                            950: '#0d0f12',
-                        }
-                    }
-                }
-            }
-        }
-    </script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.2.0/github-markdown.min.css">
     <style>
-        * { font-family: 'Inter', system-ui, sans-serif; }
-
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #1a1d24; }
-        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
-
-        /* Animations */
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateX(20px); }
-            to { opacity: 1; transform: translateX(0); }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .markdown-body { box-sizing: border-box; }
+        .markdown-body pre { background: #1e293b; border-radius: 8px; padding: 16px; overflow-x: auto; }
+        .markdown-body code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+        .markdown-body pre code { background: transparent; padding: 0; }
+        .markdown-body table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+        .markdown-body table th { background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; text-align: left; font-weight: 600; }
+        .markdown-body table td { border: 1px solid #e2e8f0; padding: 12px; vertical-align: top; }
+        .markdown-body table tr:nth-child(even) { background: #f8fafc; }
+        .scrollbar-thin::-webkit-scrollbar { width: 6px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: #f1f5f9; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .pulse-dot { animation: pulse 2s infinite; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
-
+        .fade-in { animation: fadeIn 0.3s ease-in; }
         @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-
-        @keyframes pulse-glow {
-            0%, 100% { box-shadow: 0 0 20px rgba(14, 165, 233, 0.3); }
-            50% { box-shadow: 0 0 40px rgba(14, 165, 233, 0.6); }
-        }
-
-        @keyframes typing {
-            from { width: 0; }
-            to { width: 100%; }
-        }
-
-        .animate-slide-in { animation: slideIn 0.4s ease-out; }
-        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
-        .pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
-
-        /* Glass Effect */
-        .glass {
-            background: rgba(26, 29, 36, 0.8);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-
-        /* Step Indicator */
-        .step-indicator {
-            position: relative;
-        }
-        .step-indicator::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            right: -50%;
-            width: 100%;
-            height: 2px;
-            background: linear-gradient(90deg, #0ea5e9, transparent);
-        }
-        .step-indicator:last-child::after { display: none; }
-
-        /* File Upload Zone */
-        .upload-zone {
-            border: 2px dashed rgba(14, 165, 233, 0.4);
-            transition: all 0.3s ease;
-        }
-        .upload-zone:hover, .upload-zone.dragover {
-            border-color: #0ea5e9;
-            background: rgba(14, 165, 233, 0.05);
-        }
-
-        /* Table Styles */
-        .storyboard-table {
-            border-collapse: separate;
-            border-spacing: 0;
-        }
-        .storyboard-table th {
-            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }
-        .storyboard-table tbody tr {
+        .image-preview {
             transition: all 0.2s ease;
         }
-        .storyboard-table tbody tr:hover {
-            background: rgba(14, 165, 233, 0.08);
-        }
-
-        /* Copy Button */
-        .copy-btn {
-            transition: all 0.2s ease;
-        }
-        .copy-btn:hover {
+        .image-preview:hover {
             transform: scale(1.05);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
         }
-        .copy-btn.copied {
-            background: #22c55e !important;
-        }
-
-        /* Loading Spinner */
-        .spinner {
-            border: 3px solid rgba(255, 255, 255, 0.1);
-            border-top-color: #0ea5e9;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        /* Progress Bar */
-        .progress-bar {
-            background: linear-gradient(90deg, #0ea5e9, #8b5cf6, #ec4899);
+        .loading-shimmer {
+            background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
             background-size: 200% 100%;
-            animation: shimmer 2s linear infinite;
+            animation: shimmer 1.5s infinite;
         }
         @keyframes shimmer {
             0% { background-position: 200% 0; }
             100% { background-position: -200% 0; }
         }
-
-        /* Toast Notification */
-        .toast {
-            transform: translateX(120%);
-            transition: transform 0.3s ease;
-        }
-        .toast.show { transform: translateX(0); }
-
-        /* Step transition */
-        .step-content {
-            display: none;
-        }
-        .step-content.active {
-            display: block;
-            animation: fadeIn 0.4s ease-out;
-        }
-
-        /* Prompt preview */
-        .prompt-preview {
-            font-family: 'Monaco', 'Menlo', monospace;
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-        }
     </style>
 </head>
-<body class="bg-dark-950 text-gray-100 min-h-screen">
-
-    <!-- Toast Container -->
-    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
-
-    <!-- Main Layout -->
-    <div class="flex h-screen">
-        <!-- Left Sidebar - History -->
-        <aside class="w-72 bg-dark-900 border-r border-gray-800 flex flex-col">
-            <!-- Logo -->
-            <div class="p-5 border-b border-gray-800">
+<body class="bg-slate-50 min-h-screen">
+    <div class="flex min-h-screen">
+        <!-- 左侧边栏 - 历史项目 -->
+        <aside class="w-80 bg-white border-r border-slate-200 flex flex-col shadow-sm">
+            <!-- Logo 区域 -->
+            <div class="p-6 border-b border-slate-100">
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center">
-                        <i class="ri-movie-2-fill text-white text-lg"></i>
+                    <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                        </svg>
                     </div>
                     <div>
-                        <h1 class="font-bold text-lg">Storyboard Studio</h1>
-                        <p class="text-xs text-gray-500">AI 商业视频制片</p>
+                        <h1 class="text-lg font-bold text-slate-800">视频制片工作台</h1>
+                        <p class="text-xs text-slate-500">AI 商业视频分镜生成</p>
                     </div>
                 </div>
             </div>
 
-            <!-- New Project Button -->
+            <!-- 新建项目按钮 -->
             <div class="p-4">
-                <button onclick="startNewProject()" class="w-full py-3 px-4 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-500 hover:to-primary-600 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-primary-500/25">
-                    <i class="ri-add-line"></i>
+                <button onclick="createNewProject()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-4 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/25">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
                     新建项目
                 </button>
             </div>
 
-            <!-- History List -->
-            <div class="flex-1 overflow-y-auto p-4">
-                <div class="flex items-center justify-between mb-3">
-                    <h2 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">历史记录</h2>
-                    <span id="history-count" class="text-xs text-gray-500">0 个项目</span>
+            <!-- 项目列表 -->
+            <div class="flex-1 overflow-y-auto scrollbar-thin p-4" id="projectList">
+                <div class="text-xs font-medium text-slate-400 uppercase tracking-wider mb-3">历史项目</div>
+                <div id="projectsContainer" class="space-y-2">
+                    <!-- 项目列表将动态加载 -->
                 </div>
-                <div id="history-list" class="space-y-2">
-                    <!-- Dynamic history items -->
-                </div>
-                <div id="history-empty" class="text-center py-8 text-gray-500">
-                    <i class="ri-folder-open-line text-4xl mb-2 block opacity-50"></i>
-                    <p class="text-sm">暂无历史项目</p>
-                </div>
-            </div>
-
-            <!-- Settings -->
-            <div class="p-4 border-t border-gray-800">
-                <button onclick="openSettings()" class="w-full py-2 px-3 bg-dark-850 hover:bg-gray-800 rounded-lg text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-2">
-                    <i class="ri-settings-3-line"></i>
-                    设置
-                </button>
             </div>
         </aside>
 
-        <!-- Main Content Area -->
-        <main class="flex-1 flex flex-col overflow-hidden">
-            <!-- Header -->
-            <header class="h-16 bg-dark-900/80 backdrop-blur-xl border-b border-gray-800 flex items-center justify-between px-6">
-                <div class="flex items-center gap-4">
-                    <div id="breadcrumb" class="flex items-center gap-2 text-sm">
-                        <span class="text-gray-500">制片工作台</span>
-                    </div>
+        <!-- 主工作区 -->
+        <main class="flex-1 overflow-y-auto scrollbar-thin">
+            <div class="max-w-5xl mx-auto p-8">
+                <!-- 页面标题 -->
+                <div class="mb-8">
+                    <h2 class="text-2xl font-bold text-slate-800">新建商业视频分镜</h2>
+                    <p class="text-slate-500 mt-1">填写产品信息，上传参考图，AI 将为您生成专业的分镜脚本</p>
                 </div>
-                <div class="flex items-center gap-4">
-                    <div id="save-status" class="hidden items-center gap-2 text-sm text-gray-400">
-                        <i class="ri-checkbox-circle-line text-green-500"></i>
-                        已保存
-                    </div>
-                </div>
-            </header>
 
-            <!-- Step Progress -->
-            <div id="step-progress" class="px-6 py-4 bg-dark-900/50 border-b border-gray-800/50">
-                <div class="flex items-center justify-center gap-4">
-                    <!-- Step 1 -->
-                    <div class="step-indicator flex items-center gap-2" data-step="1">
-                        <div class="step-circle w-8 h-8 rounded-full bg-primary-600 flex items-center justify-center text-sm font-semibold transition-all">
-                            <i class="ri-file-upload-line"></i>
-                        </div>
-                        <span class="text-sm font-medium hidden sm:inline">需求摄入</span>
-                    </div>
-                    <!-- Step 2 -->
-                    <div class="step-indicator flex items-center gap-2" data-step="2">
-                        <div class="step-circle w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-sm font-semibold transition-all">
-                            <span>2</span>
-                        </div>
-                        <span class="text-sm font-medium text-gray-500 hidden sm:inline">产品档案</span>
-                    </div>
-                    <!-- Step 3 -->
-                    <div class="step-indicator flex items-center gap-2" data-step="3">
-                        <div class="step-circle w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-sm font-semibold transition-all">
-                            <span>3</span>
-                        </div>
-                        <span class="text-sm font-medium text-gray-500 hidden sm:inline">分镜生成</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Content Area -->
-            <div class="flex-1 overflow-y-auto p-6">
-                <!-- Step 1: Data Ingestion -->
-                <div id="step-1" class="step-content active animate-slide-in">
-                    <div class="max-w-4xl mx-auto">
-                        <div class="text-center mb-8">
-                            <h2 class="text-2xl font-bold mb-2">需求摄入区</h2>
-                            <p class="text-gray-400">上传包含镜头信息的 CSV/Excel 需求表，或手动输入</p>
-                        </div>
-
-                        <!-- Upload Zone -->
-                        <div class="upload-zone rounded-2xl p-8 text-center cursor-pointer mb-6" onclick="document.getElementById('file-input').click()" id="upload-zone">
-                            <input type="file" id="file-input" class="hidden" accept=".csv,.xlsx,.xls" onchange="handleFileUpload(event)">
-                            <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-primary-500/10 flex items-center justify-center">
-                                <i class="ri-upload-cloud-2-line text-3xl text-primary-500"></i>
+                <!-- 主工作卡片 -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <!-- 步骤指示器 -->
+                    <div class="border-b border-slate-100 px-6 py-4">
+                        <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-2" id="step1Indicator">
+                                <div class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center text-sm font-medium">1</div>
+                                <span class="text-sm font-medium text-slate-700">产品信息</span>
                             </div>
-                            <h3 class="font-semibold mb-2">拖拽文件或点击上传</h3>
-                            <p class="text-sm text-gray-500">支持 CSV、Excel 格式</p>
-                            <p class="text-xs text-gray-600 mt-2">字段：片段时长、镜头语言、画面描述、核心动作、核心卖点</p>
+                            <div class="flex-1 h-px bg-slate-200 mx-4"></div>
+                            <div class="flex items-center gap-2 opacity-50" id="step2Indicator">
+                                <div class="w-8 h-8 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center text-sm font-medium">2</div>
+                                <span class="text-sm font-medium text-slate-500">生成结果</span>
+                            </div>
                         </div>
+                    </div>
 
-                        <!-- File Preview -->
-                        <div id="file-preview" class="hidden glass rounded-2xl p-6 mb-6">
-                            <div class="flex items-center justify-between mb-4">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
-                                        <i class="ri-file-excel-2-line text-green-500"></i>
-                                    </div>
-                                    <div>
-                                        <p id="file-name" class="font-medium"></p>
-                                        <p id="file-info" class="text-xs text-gray-500"></p>
-                                    </div>
+                    <!-- Step 1: 产品信息表单 -->
+                    <div id="step1" class="p-6">
+                        <form id="productForm" class="space-y-8">
+                            <!-- 项目名称 -->
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">项目名称</label>
+                                <input type="text" name="project_name" required
+                                    class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+                                    placeholder="例如：XXX产品商业视频">
+                            </div>
+
+                            <!-- 产品基本信息 -->
+                            <div class="grid grid-cols-2 gap-6">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-2">产品名称</label>
+                                    <input type="text" name="product_name"
+                                        class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+                                        placeholder="产品名称">
                                 </div>
-                                <button onclick="removeFile()" class="p-2 hover:bg-red-500/20 rounded-lg text-red-400 transition-colors">
-                                    <i class="ri-delete-bin-line"></i>
-                                </button>
-                            </div>
-                            <div id="table-preview" class="overflow-x-auto rounded-xl border border-gray-700"></div>
-                        </div>
-
-                        <!-- Manual Input Option -->
-                        <div class="text-center">
-                            <p class="text-gray-500 mb-3">或者</p>
-                            <button onclick="goToStep(2)" class="px-6 py-3 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors">
-                                跳过，直接手动填写产品信息
-                            </button>
-                        </div>
-
-                        <!-- Continue Button -->
-                        <div class="mt-8 text-center" id="step1-continue-wrapper">
-                            <button id="step1-continue-btn" onclick="goToStep(2)" class="px-8 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-500 hover:to-primary-600 rounded-xl font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                                继续填写产品档案
-                                <i class="ri-arrow-right-line ml-2"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Step 2: Product Metadata -->
-                <div id="step-2" class="step-content">
-                    <div class="max-w-3xl mx-auto">
-                        <div class="text-center mb-8">
-                            <h2 class="text-2xl font-bold mb-2">产品档案与物理红线</h2>
-                            <p class="text-gray-400">填写产品核心信息，确保 AI 准确理解产品特征</p>
-                        </div>
-
-                        <form id="product-form" class="space-y-6">
-                            <!-- Product Name -->
-                            <div class="glass rounded-2xl p-6">
-                                <label class="block text-sm font-semibold mb-2">
-                                    <i class="ri-shopping-bag-line text-primary-500 mr-2"></i>
-                                    产品名称
-                                </label>
-                                <input type="text" id="product-name" placeholder="如：户外折叠餐车 Pro Max" required
-                                    class="w-full px-4 py-3 bg-dark-850 border border-gray-700 rounded-xl focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all">
-                            </div>
-
-                            <!-- Material & Color -->
-                            <div class="glass rounded-2xl p-6">
-                                <label class="block text-sm font-semibold mb-2">
-                                    <i class="ri-palette-line text-primary-500 mr-2"></i>
-                                    核心材质与主色调
-                                </label>
-                                <input type="text" id="material-color" placeholder="如：航空铝合金 + 磨砂黑，橙色点缀"
-                                    class="w-full px-4 py-3 bg-dark-850 border border-gray-700 rounded-xl focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all">
-                            </div>
-
-                            <!-- Dimensions -->
-                            <div class="glass rounded-2xl p-6">
-                                <label class="block text-sm font-semibold mb-2">
-                                    <i class="ri-ruler-line text-primary-500 mr-2"></i>
-                                    精确物理尺寸 <span class="text-red-400">* 必填，作为参考基准</span>
-                                </label>
-                                <div class="grid grid-cols-3 gap-4">
-                                    <div>
-                                        <input type="text" id="dim-length" placeholder="长 (cm)" required
-                                            class="w-full px-4 py-3 bg-dark-850 border border-gray-700 rounded-xl focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all text-center">
-                                        <p class="text-xs text-gray-500 mt-1 text-center">长度</p>
-                                    </div>
-                                    <div>
-                                        <input type="text" id="dim-width" placeholder="宽 (cm)" required
-                                            class="w-full px-4 py-3 bg-dark-850 border border-gray-700 rounded-xl focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all text-center">
-                                        <p class="text-xs text-gray-500 mt-1 text-center">宽度</p>
-                                    </div>
-                                    <div>
-                                        <input type="text" id="dim-height" placeholder="高 (cm)" required
-                                            class="w-full px-4 py-3 bg-dark-850 border border-gray-700 rounded-xl focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all text-center">
-                                        <p class="text-xs text-gray-500 mt-1 text-center">高度</p>
-                                    </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-2">材质与颜色</label>
+                                    <input type="text" name="material_color"
+                                        class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+                                        placeholder="例如：铝合金，银灰色">
                                 </div>
                             </div>
 
-                            <!-- Red Lines -->
-                            <div class="glass rounded-2xl p-6">
-                                <label class="block text-sm font-semibold mb-2">
-                                    <i class="ri-forbid-line text-red-400 mr-2"></i>
-                                    画面红线 <span class="text-gray-500 font-normal">(绝对禁止改变的特征)</span>
-                                </label>
-                                <textarea id="red-lines" rows="3" placeholder="如：LOGO 必须保留原样、不能改变产品颜色、产品比例必须真实..."
-                                    class="w-full px-4 py-3 bg-dark-850 border border-gray-700 rounded-xl focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all resize-none"></textarea>
+                            <div class="grid grid-cols-2 gap-6">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-2">精确尺寸</label>
+                                    <input type="text" name="dimensions"
+                                        class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+                                        placeholder="例如：120×60×80cm">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-2">产品功能</label>
+                                    <input type="text" name="function"
+                                        class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+                                        placeholder="产品的主要功能">
+                                </div>
                             </div>
 
-                            <!-- Function -->
-                            <div class="glass rounded-2xl p-6">
-                                <label class="block text-sm font-semibold mb-2">
-                                    <i class="ri-function-line text-primary-500 mr-2"></i>
-                                    产品功能
-                                </label>
-                                <textarea id="product-function" rows="2" placeholder="这款产品是干什么用的？"
-                                    class="w-full px-4 py-3 bg-dark-850 border border-gray-700 rounded-xl focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all resize-none"></textarea>
+                            <!-- 卖点 -->
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">卖点描述</label>
+                                <textarea name="selling_points" rows="2"
+                                    class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all resize-none"
+                                    placeholder="产品的核心卖点，用于吸引消费者"></textarea>
                             </div>
 
-                            <!-- Selling Points -->
-                            <div class="glass rounded-2xl p-6">
-                                <label class="block text-sm font-semibold mb-2">
-                                    <i class="ri-magic-line text-primary-500 mr-2"></i>
-                                    产品卖点
+                            <!-- 视觉红线 -->
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">
+                                    视觉红线
+                                    <span class="text-slate-400 font-normal ml-1">(禁止修改的视觉元素)</span>
                                 </label>
-                                <textarea id="selling-points" rows="2" placeholder="产品图有什么卖点？轻便？耐用？多功能？"
-                                    class="w-full px-4 py-3 bg-dark-850 border border-gray-700 rounded-xl focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all resize-none"></textarea>
+                                <textarea name="red_lines" rows="2"
+                                    class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all resize-none"
+                                    placeholder="例如：Logo位置、产品比例、颜色准确性"></textarea>
                             </div>
 
-                            <!-- Actions -->
-                            <div class="flex justify-between items-center pt-4">
-                                <button type="button" onclick="goToStep(1)" class="px-6 py-3 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors">
-                                    <i class="ri-arrow-left-line mr-2"></i>
-                                    返回
-                                </button>
-                                <button type="submit" class="px-8 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-500 hover:to-primary-600 rounded-xl font-semibold transition-all duration-200 pulse-glow">
-                                    <i class="ri-play-line mr-2"></i>
-                                    推演商业分镜
+                            <!-- 需求表上传 -->
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">
+                                    镜头需求表
+                                    <span class="text-slate-400 font-normal ml-1">(可选上传 CSV/Excel)</span>
+                                </label>
+                                <div class="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-indigo-400 transition-colors cursor-pointer" id="uploadZone">
+                                    <input type="file" id="requirementsFile" name="requirements" accept=".csv,.xlsx,.xls" class="hidden">
+                                    <svg class="w-10 h-10 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                                    </svg>
+                                    <p class="text-slate-500 mb-1">点击或拖拽上传需求表</p>
+                                    <p class="text-xs text-slate-400">支持 CSV、Excel 格式</p>
+                                </div>
+                                <div id="fileInfo" class="hidden mt-3 p-3 bg-slate-50 rounded-lg flex items-center justify-between">
+                                    <div class="flex items-center gap-3">
+                                        <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                        </svg>
+                                        <span id="fileName" class="text-sm text-slate-700"></span>
+                                    </div>
+                                    <button type="button" onclick="removeFile()" class="text-slate-400 hover:text-red-500 transition-colors">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- 产品参考图上传 -->
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-2">
+                                    产品参考图
+                                    <span class="text-slate-400 font-normal ml-1">(最多 10 张，支持 AI 视觉分析)</span>
+                                </label>
+                                <div class="border-2 border-dashed border-slate-200 rounded-xl p-6 hover:border-indigo-400 transition-colors cursor-pointer" id="imageUploadZone">
+                                    <input type="file" id="imageFiles" name="images" multiple accept="image/*" class="hidden">
+                                    <svg class="w-10 h-10 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                    </svg>
+                                    <p class="text-slate-500 mb-1">点击或拖拽上传产品图片</p>
+                                    <p class="text-xs text-slate-400">支持 JPG、PNG、WebP 格式</p>
+                                </div>
+                                <!-- 图片预览网格 -->
+                                <div id="imagePreview" class="grid grid-cols-5 gap-4 mt-4"></div>
+                            </div>
+
+                            <!-- 提交按钮 -->
+                            <div class="flex justify-end pt-4">
+                                <button type="submit" id="submitBtn"
+                                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-8 rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg shadow-indigo-500/25 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                    </svg>
+                                    开始生成分镜
                                 </button>
                             </div>
                         </form>
                     </div>
-                </div>
 
-                <!-- Step 3: Storyboard Output -->
-                <div id="step-3" class="step-content">
-                    <!-- Loading State -->
-                    <div id="loading-state" class="max-w-6xl mx-auto">
-                        <div class="glass rounded-2xl p-12 text-center">
-                            <div class="w-20 h-20 mx-auto mb-6 rounded-full bg-primary-500/10 flex items-center justify-center">
-                                <div class="spinner"></div>
-                            </div>
-                            <h3 class="text-xl font-semibold mb-2">AI 正在推演商业分镜...</h3>
-                            <p id="loading-message" class="text-gray-400 mb-6">正在分析产品特征</p>
-                            <div class="max-w-md mx-auto h-2 bg-gray-800 rounded-full overflow-hidden">
-                                <div id="progress-bar" class="progress-bar h-full rounded-full transition-all duration-500" style="width: 0%"></div>
-                            </div>
-                            <div id="streaming-text" class="mt-6 p-4 bg-dark-900 rounded-xl text-left max-h-48 overflow-y-auto font-mono text-sm text-gray-300"></div>
-                        </div>
-                    </div>
-
-                    <!-- Results State -->
-                    <div id="results-state" class="hidden">
-                        <!-- Export Header -->
-                        <div class="max-w-7xl mx-auto mb-6 flex items-center justify-between">
-                            <div>
-                                <h2 class="text-2xl font-bold">分镜脚本已生成</h2>
-                                <p id="project-title" class="text-gray-400"></p>
-                            </div>
-                            <div class="flex items-center gap-3">
-                                <button onclick="copyAllPrompts()" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-                                    <i class="ri-file-copy-line"></i>
-                                    一键复制所有提示词
-                                </button>
-                                <button onclick="exportScript()" class="px-4 py-2 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-500 hover:to-primary-600 rounded-lg text-sm font-semibold transition-all flex items-center gap-2">
-                                    <i class="ri-download-line"></i>
-                                    导出脚本
-                                </button>
-                                <button onclick="startNewProject()" class="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-sm font-semibold transition-all flex items-center gap-2">
-                                    <i class="ri-add-line"></i>
-                                    新项目
-                                </button>
+                    <!-- Step 2: 生成结果 -->
+                    <div id="step2" class="hidden p-6">
+                        <!-- 生成状态 -->
+                        <div id="generatingState" class="hidden">
+                            <div class="flex items-center justify-center py-12">
+                                <div class="text-center">
+                                    <div class="w-16 h-16 mx-auto mb-4 relative">
+                                        <div class="absolute inset-0 border-4 border-indigo-200 rounded-full"></div>
+                                        <div class="absolute inset-0 border-4 border-indigo-600 rounded-full border-t-transparent animate-spin"></div>
+                                    </div>
+                                    <p class="text-slate-600 font-medium" id="generatingMessage">正在生成...</p>
+                                    <p class="text-xs text-slate-400 mt-2">请稍候，AI 正在创作中</p>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Storyboard Table -->
-                        <div class="max-w-7xl mx-auto glass rounded-2xl overflow-hidden">
-                            <div class="overflow-x-auto">
-                                <table class="storyboard-table w-full">
-                                    <thead>
-                                        <tr class="text-left text-sm">
-                                            <th class="px-4 py-4 font-semibold text-gray-300 border-b border-gray-700">SHOT</th>
-                                            <th class="px-4 py-4 font-semibold text-gray-300 border-b border-gray-700">时间</th>
-                                            <th class="px-4 py-4 font-semibold text-gray-300 border-b border-gray-700">景别/焦段</th>
-                                            <th class="px-4 py-4 font-semibold text-gray-300 border-b border-gray-700">运镜方式</th>
-                                            <th class="px-4 py-4 font-semibold text-gray-300 border-b border-gray-700 min-w-64">画面与动作描述</th>
-                                            <th class="px-4 py-4 font-semibold text-gray-300 border-b border-gray-700 min-w-80">首帧提示词 Start Frame</th>
-                                            <th class="px-4 py-4 font-semibold text-gray-300 border-b border-gray-700 min-w-80">尾帧提示词 End Frame</th>
-                                            <th class="px-4 py-4 font-semibold text-gray-300 border-b border-gray-700">备注</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="storyboard-body">
-                                        <!-- Dynamic rows -->
-                                    </tbody>
-                                </table>
+                        <!-- 生成结果 -->
+                        <div id="resultState" class="hidden">
+                            <!-- 操作栏 -->
+                            <div class="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-3 h-3 rounded-full bg-emerald-500"></div>
+                                    <span class="text-sm font-medium text-emerald-600">生成完成</span>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <button onclick="copyResult()" class="text-slate-500 hover:text-slate-700 transition-colors flex items-center gap-1.5 text-sm">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                        </svg>
+                                        复制
+                                    </button>
+                                    <button onclick="downloadResult()" class="text-slate-500 hover:text-slate-700 transition-colors flex items-center gap-1.5 text-sm">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                        </svg>
+                                        下载
+                                    </button>
+                                    <button onclick="resetForm()" class="text-indigo-600 hover:text-indigo-700 transition-colors flex items-center gap-1.5 text-sm font-medium">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                        </svg>
+                                        新建项目
+                                    </button>
+                                </div>
                             </div>
+
+                            <!-- Markdown 结果 -->
+                            <div id="storyboardResult" class="markdown-body prose prose-slate max-w-none min-h-[400px] p-4 bg-slate-50 rounded-xl"></div>
                         </div>
                     </div>
                 </div>
@@ -503,664 +290,491 @@
         </main>
     </div>
 
-    <!-- Settings Modal -->
-    <div id="settings-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="glass rounded-2xl w-full max-w-md animate-slide-in">
-            <div class="p-6 border-b border-gray-800 flex items-center justify-between">
-                <h3 class="text-lg font-semibold">设置</h3>
-                <button onclick="closeSettings()" class="p-2 hover:bg-gray-700 rounded-lg transition-colors">
-                    <i class="ri-close-line"></i>
-                </button>
-            </div>
-            <div class="p-6 space-y-4">
-                <div>
-                    <label class="block text-sm font-medium mb-2">API Key</label>
-                    <input type="password" id="api-key-input" placeholder="输入 API Key"
-                        class="w-full px-4 py-3 bg-dark-850 border border-gray-700 rounded-xl focus:outline-none focus:border-primary-500 transition-all">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-2">API Base URL</label>
-                    <input type="text" id="api-url-input" placeholder="https://api.openai.com/v1"
-                        class="w-full px-4 py-3 bg-dark-850 border border-gray-700 rounded-xl focus:outline-none focus:border-primary-500 transition-all">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-2">模型名称</label>
-                    <input type="text" id="model-name-input" placeholder="gpt-4o"
-                        class="w-full px-4 py-3 bg-dark-850 border border-gray-700 rounded-xl focus:outline-none focus:border-primary-500 transition-all">
-                </div>
-            </div>
-            <div class="p-6 border-t border-gray-800 flex justify-end gap-3">
-                <button onclick="closeSettings()" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors">取消</button>
-                <button onclick="saveSettings()" class="px-4 py-2 bg-primary-600 hover:bg-primary-500 rounded-lg transition-colors">保存</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Prompt Preview Modal -->
-    <div id="prompt-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-        <div class="glass rounded-2xl w-full max-w-4xl animate-slide-in max-h-[90vh] flex flex-col">
-            <div class="p-6 border-b border-gray-800 flex items-center justify-between">
-                <h3 class="text-lg font-semibold">提示词预览</h3>
-                <button onclick="closePromptModal()" class="p-2 hover:bg-gray-700 rounded-lg transition-colors">
-                    <i class="ri-close-line"></i>
-                </button>
-            </div>
-            <div class="p-6 flex-1 overflow-y-auto">
-                <pre id="prompt-content" class="prompt-preview p-4 rounded-xl text-sm text-gray-300 whitespace-pre-wrap break-words"></pre>
-            </div>
-            <div class="p-6 border-t border-gray-800 flex justify-end gap-3">
-                <button onclick="closePromptModal()" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors">关闭</button>
-                <button onclick="copyPromptFromModal()" class="px-4 py-2 bg-primary-600 hover:bg-primary-500 rounded-lg transition-colors">
-                    <i class="ri-file-copy-line mr-2"></i>复制
-                </button>
-            </div>
+    <!-- Toast 通知 -->
+    <div id="toast" class="fixed bottom-6 right-6 transform translate-y-full opacity-0 transition-all duration-300 pointer-events-none z-50">
+        <div class="bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3">
+            <svg id="toastIcon" class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span id="toastMessage" class="text-sm">操作成功</span>
         </div>
     </div>
 
     <script>
-        // ==================== State Management ====================
-        let state = {
-            currentStep: 1,
-            uploadedFile: null,
-            tableData: [],
-            productMetadata: {},
-            storyboardData: [],
-            currentProjectId: null,
-            currentPromptToCopy: ''
-        };
+        // 全局变量
+        let uploadedImages = [];
+        let currentResult = '';
 
-        // ==================== Initialize ====================
+        // 初始化
         document.addEventListener('DOMContentLoaded', () => {
-            loadHistory();
-            setupDragDrop();
+            loadProjects();
+            setupUploadZone();
+            setupImageUploadZone();
             setupFormSubmit();
         });
 
-        // ==================== Step Navigation ====================
-        function goToStep(step) {
-            state.currentStep = step;
+        // 加载项目列表
+        async function loadProjects() {
+            try {
+                const response = await fetch('/api/projects');
+                const data = await response.json();
 
-            // Update step indicators
-            document.querySelectorAll('.step-indicator').forEach((indicator, index) => {
-                const stepNum = index + 1;
-                const circle = indicator.querySelector('.step-circle');
+                const container = document.getElementById('projectsContainer');
 
-                if (stepNum < step) {
-                    circle.className = 'step-circle w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-sm font-semibold transition-all';
-                    circle.innerHTML = '<i class="ri-check-line"></i>';
-                    indicator.querySelector('span').className = 'text-sm font-medium text-green-400 hidden sm:inline';
-                } else if (stepNum === step) {
-                    circle.className = 'step-circle w-8 h-8 rounded-full bg-primary-600 flex items-center justify-center text-sm font-semibold transition-all';
-                    circle.innerHTML = `<span>${stepNum}</span>`;
-                    indicator.querySelector('span').className = 'text-sm font-medium hidden sm:inline';
+                if (data.projects && data.projects.length > 0) {
+                    container.innerHTML = data.projects.map(project => `
+                        <div class="project-item p-3 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors group" onclick="loadProject(${project.id})">
+                            <div class="flex items-center justify-between">
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-medium text-slate-700 truncate">${escapeHtml(project.project_name)}</p>
+                                    <p class="text-xs text-slate-400 mt-0.5">${formatDate(project.updated_at)}</p>
+                                </div>
+                                <button onclick="event.stopPropagation(); deleteProject(${project.id})" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all p-1">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('');
                 } else {
-                    circle.className = 'step-circle w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-sm font-semibold transition-all';
-                    circle.innerHTML = `<span>${stepNum}</span>`;
-                    indicator.querySelector('span').className = 'text-sm font-medium text-gray-500 hidden sm:inline';
+                    container.innerHTML = '<p class="text-sm text-slate-400 text-center py-4">暂无历史项目</p>';
                 }
-            });
-
-            // Show/hide step content
-            document.querySelectorAll('.step-content').forEach((content, index) => {
-                content.classList.toggle('active', index + 1 === step);
-            });
-
-            // Scroll to top
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            } catch (error) {
+                console.error('加载项目失败:', error);
+            }
         }
 
-        // ==================== File Upload ====================
-        function setupDragDrop() {
-            const zone = document.getElementById('upload-zone');
+        // 设置需求表上传区
+        function setupUploadZone() {
+            const zone = document.getElementById('uploadZone');
+            const input = document.getElementById('requirementsFile');
 
-            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-                zone.addEventListener(eventName, preventDefaults, false);
-            });
+            zone.addEventListener('click', () => input.click());
 
-            function preventDefaults(e) {
+            zone.addEventListener('dragover', (e) => {
                 e.preventDefault();
-                e.stopPropagation();
-            }
-
-            ['dragenter', 'dragover'].forEach(eventName => {
-                zone.addEventListener(eventName, () => zone.classList.add('dragover'), false);
+                zone.classList.add('border-indigo-400', 'bg-indigo-50');
             });
 
-            ['dragleave', 'drop'].forEach(eventName => {
-                zone.addEventListener(eventName, () => zone.classList.remove('dragover'), false);
+            zone.addEventListener('dragleave', () => {
+                zone.classList.remove('border-indigo-400', 'bg-indigo-50');
             });
 
             zone.addEventListener('drop', (e) => {
-                const file = e.dataTransfer.files[0];
-                if (file) handleFileUpload({ target: { files: [file] } });
-            }, false);
-        }
-
-        async function handleFileUpload(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            state.uploadedFile = file;
-
-            // Show preview
-            document.getElementById('file-preview').classList.remove('hidden');
-            document.getElementById('file-name').textContent = file.name;
-            document.getElementById('file-info').textContent = `${(file.size / 1024).toFixed(1)} KB`;
-
-            // Upload to server
-            const formData = new FormData();
-            formData.append('file', file);
-
-            try {
-                const response = await fetch('/api/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    state.tableData = result.data;
-                    renderTablePreview(result.data, result.columns);
-                    document.getElementById('step1-continue-btn').disabled = false;
-                    showToast('文件上传成功', 'success');
-                } else {
-                    showToast(result.error || '文件解析失败', 'error');
-                }
-            } catch (error) {
-                showToast('上传失败: ' + error.message, 'error');
-            }
-        }
-
-        function renderTablePreview(data, columns) {
-            const container = document.getElementById('table-preview');
-
-            if (!data || data.length === 0) {
-                container.innerHTML = '<p class="text-gray-500 text-center py-4">无数据</p>';
-                return;
-            }
-
-            const headers = Object.keys(data[0]);
-            let html = '<table class="w-full text-sm">';
-            html += '<thead><tr>';
-            headers.forEach(h => {
-                html += `<th class="px-3 py-2 text-left font-medium text-gray-400 border-b border-gray-700">${h}</th>`;
-            });
-            html += '</tr></thead><tbody>';
-
-            data.slice(0, 5).forEach(row => {
-                html += '<tr class="border-b border-gray-700/50">';
-                headers.forEach(h => {
-                    html += `<td class="px-3 py-2">${row[h] || '-'}</td>`;
-                });
-                html += '</tr>';
-            });
-
-            if (data.length > 5) {
-                html += `<tr><td colspan="${headers.length}" class="px-3 py-2 text-center text-gray-500">...还有 ${data.length - 5} 行</td></tr>`;
-            }
-
-            html += '</tbody></table>';
-            container.innerHTML = html;
-        }
-
-        function removeFile() {
-            state.uploadedFile = null;
-            state.tableData = [];
-            document.getElementById('file-preview').classList.add('hidden');
-            document.getElementById('step1-continue-btn').disabled = true;
-            document.getElementById('file-input').value = '';
-        }
-
-        // ==================== Product Form ====================
-        function setupFormSubmit() {
-            document.getElementById('product-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
-                await generateStoryboard();
-            });
-        }
-
-        async function generateStoryboard() {
-            // Collect form data
-            const dimensions = `${document.getElementById('dim-length').value} x ${document.getElementById('dim-width').value} x ${document.getElementById('dim-height').value} cm`;
-
-            state.productMetadata = {
-                product_name: document.getElementById('product-name').value,
-                material_color: document.getElementById('material-color').value,
-                dimensions: dimensions,
-                red_lines: document.getElementById('red-lines').value,
-                function: document.getElementById('product-function').value,
-                selling_points: document.getElementById('selling-points').value
-            };
-
-            // Go to step 3 and start generation
-            goToStep(3);
-            document.getElementById('loading-state').classList.remove('hidden');
-            document.getElementById('results-state').classList.add('hidden');
-
-            // Start SSE stream
-            try {
-                const response = await fetch('/api/generate', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        productMetadata: state.productMetadata,
-                        tableData: state.tableData
-                    })
-                });
-
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-                let buffer = '';
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-
-                    buffer += decoder.decode(value, { stream: true });
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop() || '';
-
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            const data = JSON.parse(line.slice(6));
-                            handleStreamData(data);
-                        }
-                    }
+                zone.classList.remove('border-indigo-400', 'bg-indigo-50');
+                if (e.dataTransfer.files.length) {
+                    input.files = e.dataTransfer.files;
+                    showFileInfo(e.dataTransfer.files[0]);
                 }
-            } catch (error) {
-                showToast('生成失败: ' + error.message, 'error');
-                goToStep(2);
-            }
-        }
-
-        function handleStreamData(data) {
-            const streamingText = document.getElementById('streaming-text');
-            const progressBar = document.getElementById('progress-bar');
-            const loadingMessage = document.getElementById('loading-message');
-
-            switch (data.type) {
-                case 'start':
-                    loadingMessage.textContent = data.message;
-                    break;
-
-                case 'chunk':
-                    streamingText.textContent += data.content;
-                    streamingText.scrollTop = streamingText.scrollHeight;
-                    // Simulate progress
-                    const currentWidth = parseInt(progressBar.style.width) || 0;
-                    progressBar.style.width = Math.min(currentWidth + 2, 90) + '%';
-                    break;
-
-                case 'success':
-                    progressBar.style.width = '100%';
-                    loadingMessage.textContent = '生成完成!';
-
-                    setTimeout(() => {
-                        document.getElementById('loading-state').classList.add('hidden');
-                        document.getElementById('results-state').classList.remove('hidden');
-                        renderStoryboard(data.data);
-                        saveCurrentProject(data.data);
-                    }, 500);
-                    break;
-
-                case 'error':
-                    showToast(data.message, 'error');
-                    goToStep(2);
-                    break;
-            }
-        }
-
-        function renderStoryboard(data) {
-            state.storyboardData = data;
-            const tbody = document.getElementById('storyboard-body');
-            const productName = state.productMetadata.product_name || 'Product';
-
-            let html = '';
-            data.forEach((shot, index) => {
-                const startFrame = shot.start_frame.replace(/\[PRODUCT NAME\]/g, productName);
-                const endFrame = shot.end_frame.replace(/\[PRODUCT NAME\]/g, productName);
-
-                html += `
-                    <tr class="border-b border-gray-800/50 hover:bg-primary-500/5 transition-colors">
-                        <td class="px-4 py-4">
-                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-500/20 to-primary-600/20 flex items-center justify-center font-bold text-primary-400">
-                                ${shot.shot || index + 1}
-                            </div>
-                        </td>
-                        <td class="px-4 py-4">
-                            <span class="px-2 py-1 bg-gray-800 rounded text-sm font-mono">${shot.time || '-'}</span>
-                        </td>
-                        <td class="px-4 py-4">
-                            <div class="space-y-1">
-                                <span class="px-2 py-1 bg-primary-500/20 text-primary-300 rounded text-xs">${shot.framing || '-'}</span>
-                                <span class="px-2 py-1 bg-purple-500/20 text-purple-300 rounded text-xs">${shot.lens || '-'}</span>
-                            </div>
-                        </td>
-                        <td class="px-4 py-4">
-                            <span class="px-2 py-1 bg-amber-500/20 text-amber-300 rounded text-xs">${shot.movement || 'Static'}</span>
-                        </td>
-                        <td class="px-4 py-4">
-                            <p class="text-sm text-gray-300">${shot.description || '-'}</p>
-                        </td>
-                        <td class="px-4 py-4 min-w-80">
-                            <div class="space-y-2">
-                                <p class="prompt-preview p-2 rounded-lg text-xs text-gray-300 leading-relaxed">${startFrame}</p>
-                                <div class="flex gap-2">
-                                    <button onclick="copyPrompt(this, \`${escapeForJs(startFrame)}\`)" class="copy-btn px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs flex items-center gap-1 transition-all">
-                                        <i class="ri-file-copy-line"></i>复制
-                                    </button>
-                                    <button onclick="showPromptModal(\`${escapeForJs(startFrame)}\`)" class="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs flex items-center gap-1 transition-all">
-                                        <i class="ri-external-link-line"></i>查看
-                                    </button>
-                                </div>
-                            </div>
-                        </td>
-                        <td class="px-4 py-4 min-w-80">
-                            <div class="space-y-2">
-                                <p class="prompt-preview p-2 rounded-lg text-xs text-gray-300 leading-relaxed">${endFrame}</p>
-                                <div class="flex gap-2">
-                                    <button onclick="copyPrompt(this, \`${escapeForJs(endFrame)}\`)" class="copy-btn px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs flex items-center gap-1 transition-all">
-                                        <i class="ri-file-copy-line"></i>复制
-                                    </button>
-                                    <button onclick="showPromptModal(\`${escapeForJs(endFrame)}\`)" class="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs flex items-center gap-1 transition-all">
-                                        <i class="ri-external-link-line"></i>查看
-                                    </button>
-                                </div>
-                            </div>
-                        </td>
-                        <td class="px-4 py-4">
-                            <p class="text-xs text-gray-500">${shot.notes || '-'}</p>
-                        </td>
-                    </tr>
-                `;
             });
 
-            tbody.innerHTML = html;
-            document.getElementById('project-title').textContent = state.productMetadata.product_name;
-        }
-
-        function escapeForJs(str) {
-            return str.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
-        }
-
-        // ==================== Copy Functions ====================
-        function copyPrompt(btn, text) {
-            navigator.clipboard.writeText(text).then(() => {
-                btn.classList.add('copied');
-                btn.innerHTML = '<i class="ri-check-line"></i>已复制';
-                setTimeout(() => {
-                    btn.classList.remove('copied');
-                    btn.innerHTML = '<i class="ri-file-copy-line"></i>复制';
-                }, 2000);
-            });
-        }
-
-        function copyAllPrompts() {
-            const productName = state.productMetadata.product_name || 'Product';
-            let allPrompts = '';
-
-            state.storyboardData.forEach((shot, index) => {
-                const startFrame = shot.start_frame.replace(/\[PRODUCT NAME\]/g, productName);
-                const endFrame = shot.end_frame.replace(/\[PRODUCT NAME\]/g, productName);
-
-                allPrompts += `=== Shot ${shot.shot || index + 1} ===\n`;
-                allPrompts += `START FRAME:\n${startFrame}\n\n`;
-                allPrompts += `END FRAME:\n${endFrame}\n\n`;
-                allPrompts += `${shot.notes || ''}\n\n`;
-                allPrompts += '---\n\n';
-            });
-
-            navigator.clipboard.writeText(allPrompts).then(() => {
-                showToast('所有提示词已复制到剪贴板', 'success');
-            });
-        }
-
-        function showPromptModal(text) {
-            state.currentPromptToCopy = text;
-            document.getElementById('prompt-content').textContent = text;
-            document.getElementById('prompt-modal').classList.remove('hidden');
-        }
-
-        function closePromptModal() {
-            document.getElementById('prompt-modal').classList.add('hidden');
-        }
-
-        function copyPromptFromModal() {
-            navigator.clipboard.writeText(state.currentPromptToCopy).then(() => {
-                showToast('提示词已复制', 'success');
-            });
-        }
-
-        // ==================== Export Functions ====================
-        function exportScript() {
-            const productName = state.productMetadata.product_name || 'Product';
-            let content = `AI 商业视频分镜脚本\n`;
-            content += `项目: ${productName}\n`;
-            content += `生成时间: ${new Date().toLocaleString()}\n`;
-            content += `${'='.repeat(60)}\n\n`;
-
-            state.storyboardData.forEach((shot, index) => {
-                const startFrame = shot.start_frame.replace(/\[PRODUCT NAME\]/g, productName);
-                const endFrame = shot.end_frame.replace(/\[PRODUCT NAME\]/g, productName);
-
-                content += `【镜头 ${shot.shot || index + 1}】\n`;
-                content += `时间: ${shot.time || '-'}\n`;
-                content += `景别: ${shot.framing || '-'} | 焦段: ${shot.lens || '-'} | 运镜: ${shot.movement || 'Static'}\n`;
-                content += `描述: ${shot.description || '-'}\n\n`;
-                content += `首帧提示词:\n${startFrame}\n\n`;
-                content += `尾帧提示词:\n${endFrame}\n\n`;
-                content += `备注: ${shot.notes || '-'}\n`;
-                content += `${'-'.repeat(40)}\n\n`;
-            });
-
-            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${productName}_分镜脚本_${Date.now()}.txt`;
-            a.click();
-            URL.revokeObjectURL(url);
-
-            showToast('脚本导出成功', 'success');
-        }
-
-        // ==================== Project Management ====================
-        async function saveCurrentProject(storyboardData) {
-            try {
-                const response = await fetch('/api/save', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        project_name: state.productMetadata.product_name || `项目_${Date.now()}`,
-                        product_metadata: state.productMetadata,
-                        table_data: state.tableData,
-                        generated_script: JSON.stringify(storyboardData)
-                    })
-                });
-
-                const result = await response.json();
-                if (result.success) {
-                    state.currentProjectId = result.project_id;
-                    document.getElementById('save-status').classList.remove('hidden');
-                    document.getElementById('save-status').classList.add('flex');
-                    loadHistory();
-                    showToast('项目已自动保存', 'success');
+            input.addEventListener('change', () => {
+                if (input.files.length) {
+                    showFileInfo(input.files[0]);
                 }
-            } catch (error) {
-                console.error('Save failed:', error);
-            }
+            });
         }
 
-        async function loadHistory() {
-            try {
-                const response = await fetch('/api/projects');
-                const result = await response.json();
+        // 显示文件信息
+        function showFileInfo(file) {
+            const fileInfo = document.getElementById('fileInfo');
+            const fileName = document.getElementById('fileName');
+            fileName.textContent = file.name;
+            fileInfo.classList.remove('hidden');
+        }
 
-                if (result.success) {
-                    renderHistory(result.projects);
+        // 移除文件
+        function removeFile() {
+            document.getElementById('requirementsFile').value = '';
+            document.getElementById('fileInfo').classList.add('hidden');
+        }
+
+        // 设置图片上传区
+        function setupImageUploadZone() {
+            const zone = document.getElementById('imageUploadZone');
+            const input = document.getElementById('imageFiles');
+
+            zone.addEventListener('click', () => input.click());
+
+            zone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                zone.classList.add('border-indigo-400', 'bg-indigo-50');
+            });
+
+            zone.addEventListener('dragleave', () => {
+                zone.classList.remove('border-indigo-400', 'bg-indigo-50');
+            });
+
+            zone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                zone.classList.remove('border-indigo-400', 'bg-indigo-50');
+                handleImageFiles(e.dataTransfer.files);
+            });
+
+            input.addEventListener('change', () => {
+                handleImageFiles(input.files);
+            });
+        }
+
+        // 处理图片文件
+        function handleImageFiles(files) {
+            const remaining = 10 - uploadedImages.length;
+            const toAdd = Array.from(files).slice(0, remaining);
+
+            toAdd.forEach(file => {
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        uploadedImages.push({
+                            file: file,
+                            preview: e.target.result
+                        });
+                        renderImagePreviews();
+                    };
+                    reader.readAsDataURL(file);
                 }
-            } catch (error) {
-                console.error('Load history failed:', error);
+            });
+
+            if (files.length > remaining) {
+                showToast(`最多只能上传 10 张图片，已添加 ${remaining} 张`, 'warning');
             }
         }
 
-        function renderHistory(projects) {
-            const container = document.getElementById('history-list');
-            const empty = document.getElementById('history-empty');
-            const count = document.getElementById('history-count');
+        // 渲染图片预览
+        function renderImagePreviews() {
+            const container = document.getElementById('imagePreview');
 
-            count.textContent = `${projects.length} 个项目`;
-
-            if (!projects || projects.length === 0) {
+            if (uploadedImages.length === 0) {
                 container.innerHTML = '';
-                empty.classList.remove('hidden');
                 return;
             }
 
-            empty.classList.add('hidden');
-            container.innerHTML = projects.map(p => `
-                <div class="p-3 rounded-xl bg-dark-850 hover:bg-gray-800 transition-colors cursor-pointer group" onclick="loadProject(${p.id})">
-                    <div class="flex items-start justify-between">
-                        <div class="flex-1 min-w-0">
-                            <p class="font-medium text-sm truncate">${p.project_name}</p>
-                            <p class="text-xs text-gray-500 mt-1">${new Date(p.created_at).toLocaleDateString()}</p>
-                        </div>
-                        <button onclick="event.stopPropagation(); deleteProject(${p.id})" class="p-1 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 rounded text-red-400 transition-all">
-                            <i class="ri-delete-bin-line text-sm"></i>
-                        </button>
+            container.innerHTML = uploadedImages.map((img, index) => `
+                <div class="image-preview relative aspect-square rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
+                    <img src="${img.preview}" alt="Preview ${index + 1}" class="w-full h-full object-cover">
+                    <button onclick="removeImage(${index})" class="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                    <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/50 to-transparent p-2">
+                        <span class="text-xs text-white">${img.file.name.substring(0, 10)}...</span>
                     </div>
                 </div>
             `).join('');
         }
 
-        async function loadProject(id) {
-            try {
-                const response = await fetch(`/api/project/${id}`);
-                const result = await response.json();
+        // 移除图片
+        function removeImage(index) {
+            uploadedImages.splice(index, 1);
+            renderImagePreviews();
+        }
 
-                if (result.success) {
-                    const project = result.project;
+        // 设置表单提交
+        function setupFormSubmit() {
+            const form = document.getElementById('productForm');
+            const submitBtn = document.getElementById('submitBtn');
 
-                    // Restore state
-                    state.productMetadata = project.product_metadata || {};
-                    state.tableData = project.raw_table_data || [];
-                    state.storyboardData = JSON.parse(project.generated_script || '[]');
-                    state.currentProjectId = id;
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
 
-                    // Update form
-                    document.getElementById('product-name').value = state.productMetadata.product_name || '';
-                    document.getElementById('material-color').value = state.productMetadata.material_color || '';
-                    const dims = (state.productMetadata.dimensions || '').split('x').map(d => d.trim());
-                    if (dims.length === 3) {
-                        document.getElementById('dim-length').value = dims[0] || '';
-                        document.getElementById('dim-width').value = dims[1] || '';
-                        document.getElementById('dim-height').value = dims[2] || '';
+                // 收集表单数据
+                const formData = new FormData(form);
+
+                // 添加图片
+                uploadedImages.forEach((img, index) => {
+                    formData.append('images', img.file);
+                });
+
+                // 添加产品元数据
+                const productMetadata = {
+                    project_name: formData.get('project_name'),
+                    product_name: formData.get('product_name'),
+                    material_color: formData.get('material_color'),
+                    dimensions: formData.get('dimensions'),
+                    function: formData.get('function'),
+                    selling_points: formData.get('selling_points'),
+                    red_lines: formData.get('red_lines'),
+                    requirements: formData.get('requirements')
+                };
+                formData.set('productMetadata', JSON.stringify(productMetadata));
+
+                // 显示加载状态
+                showGeneratingState();
+                submitBtn.disabled = true;
+
+                try {
+                    const response = await fetch('/api/generate', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
                     }
-                    document.getElementById('red-lines').value = state.productMetadata.red_lines || '';
-                    document.getElementById('product-function').value = state.productMetadata.function || '';
-                    document.getElementById('selling-points').value = state.productMetadata.selling_points || '';
 
-                    // Show results
-                    goToStep(3);
-                    document.getElementById('loading-state').classList.add('hidden');
-                    document.getElementById('results-state').classList.remove('hidden');
-                    renderStoryboard(state.storyboardData);
+                    // 处理流式响应
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    currentResult = '';
 
-                    showToast('项目已加载', 'success');
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+
+                        const chunk = decoder.decode(value);
+                        const lines = chunk.split('\n');
+
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    const data = JSON.parse(line.slice(6));
+                                    handleStreamEvent(data);
+                                } catch (parseError) {
+                                    console.error('解析事件失败:', parseError);
+                                }
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('生成失败:', error);
+                    showToast('生成失败: ' + error.message, 'error');
+                    showStep1();
+                } finally {
+                    submitBtn.disabled = false;
                 }
-            } catch (error) {
-                showToast('加载失败: ' + error.message, 'error');
+            });
+        }
+
+        // 处理流事件
+        function handleStreamEvent(data) {
+            switch (data.type) {
+                case 'start':
+                    document.getElementById('generatingMessage').textContent = data.message;
+                    break;
+
+                case 'chunk':
+                    currentResult += data.content;
+                    document.getElementById('storyboardResult').innerHTML = marked.parse(currentResult);
+                    // 滚动到底部
+                    document.getElementById('storyboardResult').scrollIntoView({ behavior: 'smooth', block: 'end' });
+                    break;
+
+                case 'done':
+                    showResultState();
+                    showToast('分镜脚本生成完成！', 'success');
+                    loadProjects();
+                    break;
+
+                case 'error':
+                    showToast('错误: ' + data.message, 'error');
+                    showStep1();
+                    break;
+
+                case 'saved':
+                    showToast('项目已保存到历史记录', 'success');
+                    break;
+
+                case 'save_warning':
+                    showToast(data.message, 'warning');
+                    break;
             }
         }
 
-        async function deleteProject(id) {
+        // 显示生成状态
+        function showGeneratingState() {
+            document.getElementById('step1').classList.add('hidden');
+            document.getElementById('step2').classList.remove('hidden');
+            document.getElementById('generatingState').classList.remove('hidden');
+            document.getElementById('resultState').classList.add('hidden');
+
+            // 更新步骤指示器
+            document.getElementById('step1Indicator').classList.add('opacity-50');
+            document.getElementById('step2Indicator').classList.remove('opacity-50');
+            document.getElementById('step2Indicator').querySelector('div').classList.remove('bg-slate-200', 'text-slate-500');
+            document.getElementById('step2Indicator').querySelector('div').classList.add('bg-indigo-600', 'text-white');
+        }
+
+        // 显示结果状态
+        function showResultState() {
+            document.getElementById('generatingState').classList.add('hidden');
+            document.getElementById('resultState').classList.remove('hidden');
+        }
+
+        // 显示 Step 1
+        function showStep1() {
+            document.getElementById('step1').classList.remove('hidden');
+            document.getElementById('step2').classList.add('hidden');
+            document.getElementById('generatingState').classList.add('hidden');
+            document.getElementById('resultState').classList.add('hidden');
+
+            // 重置步骤指示器
+            document.getElementById('step1Indicator').classList.remove('opacity-50');
+            document.getElementById('step2Indicator').classList.add('opacity-50');
+            document.getElementById('step2Indicator').querySelector('div').classList.add('bg-slate-200', 'text-slate-500');
+            document.getElementById('step2Indicator').querySelector('div').classList.remove('bg-indigo-600', 'text-white');
+        }
+
+        // 新建项目
+        function createNewProject() {
+            resetForm();
+        }
+
+        // 重置表单
+        function resetForm() {
+            document.getElementById('productForm').reset();
+            uploadedImages = [];
+            currentResult = '';
+            renderImagePreviews();
+            removeFile();
+            showStep1();
+        }
+
+        // 加载项目
+        async function loadProject(projectId) {
+            try {
+                const response = await fetch(`/api/projects/${projectId}`);
+                const data = await response.json();
+
+                if (data.success && data.project) {
+                    const project = data.project;
+
+                    // 填充表单
+                    document.querySelector('[name="project_name"]').value = project.project_name || '';
+                    document.querySelector('[name="product_name"]').value = project.product_name || '';
+                    document.querySelector('[name="material_color"]').value = project.product_material || '';
+                    document.querySelector('[name="dimensions"]').value = project.product_dimensions || '';
+                    document.querySelector('[name="function"]').value = project.product_function || '';
+                    document.querySelector('[name="selling_points"]').value = project.selling_points || '';
+                    document.querySelector('[name="red_lines"]').value = project.red_lines || '';
+
+                    // 显示历史内容
+                    if (project.storyboard_content) {
+                        currentResult = project.storyboard_content;
+                        showStep2WithResult();
+                    }
+
+                    showToast('已加载项目: ' + project.project_name, 'success');
+                }
+            } catch (error) {
+                console.error('加载项目失败:', error);
+                showToast('加载项目失败', 'error');
+            }
+        }
+
+        // 显示带结果的 Step 2
+        function showStep2WithResult() {
+            document.getElementById('step1').classList.add('hidden');
+            document.getElementById('step2').classList.remove('hidden');
+            document.getElementById('generatingState').classList.add('hidden');
+            document.getElementById('resultState').classList.remove('hidden');
+            document.getElementById('storyboardResult').innerHTML = marked.parse(currentResult);
+
+            // 更新步骤指示器
+            document.getElementById('step1Indicator').classList.add('opacity-50');
+            document.getElementById('step2Indicator').classList.remove('opacity-50');
+            document.getElementById('step2Indicator').querySelector('div').classList.remove('bg-slate-200', 'text-slate-500');
+            document.getElementById('step2Indicator').querySelector('div').classList.add('bg-indigo-600', 'text-white');
+        }
+
+        // 删除项目
+        async function deleteProject(projectId) {
             if (!confirm('确定要删除这个项目吗？')) return;
 
             try {
-                const response = await fetch(`/api/project/${id}`, { method: 'DELETE' });
-                const result = await response.json();
+                const response = await fetch(`/api/projects/${projectId}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
 
-                if (result.success) {
-                    loadHistory();
+                if (data.success) {
                     showToast('项目已删除', 'success');
+                    loadProjects();
+                } else {
+                    showToast(data.error || '删除失败', 'error');
                 }
             } catch (error) {
-                showToast('删除失败: ' + error.message, 'error');
+                console.error('删除项目失败:', error);
+                showToast('删除项目失败', 'error');
             }
         }
 
-        function startNewProject() {
-            // Reset state
-            state = {
-                currentStep: 1,
-                uploadedFile: null,
-                tableData: [],
-                productMetadata: {},
-                storyboardData: [],
-                currentProjectId: null,
-                currentPromptToCopy: ''
+        // 复制结果
+        function copyResult() {
+            navigator.clipboard.writeText(currentResult).then(() => {
+                showToast('已复制到剪贴板', 'success');
+            }).catch(() => {
+                showToast('复制失败', 'error');
+            });
+        }
+
+        // 下载结果
+        function downloadResult() {
+            const blob = new Blob([currentResult], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `分镜脚本_${new Date().toISOString().slice(0, 10)}.md`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('开始下载', 'success');
+        }
+
+        // Toast 通知
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            const toastIcon = document.getElementById('toastIcon');
+
+            toastMessage.textContent = message;
+
+            // 设置图标
+            const icons = {
+                success: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>',
+                error: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>',
+                warning: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>'
             };
-
-            // Reset form
-            document.getElementById('product-form').reset();
-            removeFile();
-
-            // Reset UI
-            document.getElementById('save-status').classList.add('hidden');
-            document.getElementById('save-status').classList.remove('flex');
-
-            goToStep(1);
-        }
-
-        // ==================== Settings ====================
-        function openSettings() {
-            document.getElementById('settings-modal').classList.remove('hidden');
-        }
-
-        function closeSettings() {
-            document.getElementById('settings-modal').classList.add('hidden');
-        }
-
-        function saveSettings() {
-            const apiKey = document.getElementById('api-key-input').value;
-            const apiUrl = document.getElementById('api-url-input').value;
-            const modelName = document.getElementById('model-name-input').value;
-
-            // Save to .env file via API call (simplified - in production you'd call an API)
-            showToast('设置已保存 (请重启服务器以生效)', 'success');
-            closeSettings();
-        }
-
-        // ==================== Toast Notifications ====================
-        function showToast(message, type = 'info') {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
 
             const colors = {
-                success: 'bg-green-600',
-                error: 'bg-red-600',
-                info: 'bg-blue-600'
+                success: 'text-emerald-400',
+                error: 'text-red-400',
+                warning: 'text-amber-400'
             };
 
-            const icons = {
-                success: 'ri-check-circle-line',
-                error: 'ri-error-warning-line',
-                info: 'ri-information-line'
-            };
+            toastIcon.innerHTML = icons[type] || icons.success;
+            toastIcon.className = `w-5 h-5 ${colors[type] || colors.success}`;
 
-            toast.className = `toast ${colors[type]} px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 text-sm font-medium show`;
-            toast.innerHTML = `
-                <i class="${icons[type]} text-lg"></i>
-                <span>${message}</span>
-            `;
-
-            container.appendChild(toast);
+            toast.classList.remove('translate-y-full', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
 
             setTimeout(() => {
-                toast.classList.remove('show');
-                setTimeout(() => toast.remove(), 300);
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-full', 'opacity-0');
             }, 3000);
+        }
+
+        // 工具函数
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diff = now - date;
+
+            if (diff < 60000) return '刚刚';
+            if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`;
+            if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`;
+            if (diff < 604800000) return `${Math.floor(diff / 86400000)} 天前`;
+
+            return date.toLocaleDateString('zh-CN');
         }
     </script>
 </body>

@@ -1,240 +1,205 @@
 """
 AI 商业视频制片工作台 - Flask 后端
-支持流式 SSE 输出，调用大模型生成专业分镜脚本
+支持多模态图片输入 + 流式 Markdown 输出
 """
-
 import os
 import json
+import base64
+import uuid
+from datetime import datetime
+from io import BytesIO
+
 from flask import Flask, render_template, request, jsonify, Response
-from flask_cors import CORS
 from openai import OpenAI
 from dotenv import load_dotenv
-from datetime import datetime
-import pandas as pd
-import io
-import math
 
-from database import get_db
+from database import (
+    init_database, create_project, update_project,
+    get_all_projects, get_project, delete_project,
+    save_project_images, get_project_images
+)
 
 # 加载环境变量
 load_dotenv()
 
-# 初始化 Flask
 app = Flask(__name__)
-CORS(app)
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max
 
-# 初始化 OpenAI 客户端
-_api_key = os.getenv("NEW_API_KEY")
-_api_base = os.getenv("NEW_API_BASE_URL")
-
-# 避免 httpx proxies 参数问题：如果使用默认 URL 则不设置 base_url
-if _api_base and _api_base != "https://api.openai.com/v1":
-    client = OpenAI(api_key=_api_key, base_url=_api_base)
-else:
-    client = OpenAI(api_key=_api_key)
-
+# API 配置
+API_KEY = os.getenv("NEW_API_KEY", os.getenv("OPENAI_API_KEY", ""))
+API_BASE = os.getenv("NEW_API_BASE_URL", os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1"))
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o")
 
-# 系统提示词 - 资深跨境电商视觉总监与好莱坞级灯光摄影指导
-SYSTEM_PROMPT = """You are a senior cross-border e-commerce visual director and Hollywood-level lighting and photography director.
+# 初始化 OpenAI 客户端
+client = OpenAI(api_key=API_KEY, base_url=API_BASE)
 
-Your task is to generate professional commercial storyboard scripts based on user-provided product data and requirements table.
+# ==================== 系统提示词 ====================
+SYSTEM_PROMPT = """你是好莱坞级灯光摄影指导与 Midjourney/Sora 资深提示词工程师。
 
-## CRITICAL CONSTRAINTS - YOU MUST FOLLOW STRICTLY:
+## 你的任务
+根据用户提供的需求表和产品信息，为商业视频生成专业的分镜脚本和 Midjourney 提示词。
 
-1. **PHYSICAL ACCURACY**: You MUST respect the exact physical dimensions and proportions provided by the user. NEVER distort product size in any frame.
+## 核心原则
+1. **你已看到用户上传的产品参考图** - 在撰写提示词时，必须精准描述图中的材质、颜色和结构
+2. **分镜脚本必须专业** - 包含镜头编号、时长、运镜、场景描述、画面内容、AI提示词
+3. **提示词格式要求** - 首尾帧提示词必须以 `[Image Reference]` 开头
+4. **双语呈现** - 英文提示词下方必须附带低调的中文翻译
 
-2. **BRAND INTEGRITY**: You MUST preserve all brand elements (logos, colors, distinctive markings) exactly as specified in the "red lines" (forbidden changes).
+## 输出格式
+直接输出 Markdown 格式的分镜表格，使用以下列：
+| 镜头 | 时长 | 运镜 | 场景描述 | 画面内容 | AI提示词(英文+中文) |
 
-3. **PROMPT FORMAT**: All prompts MUST be:
-   - Pure English
-   - Comma-separated tags format
-   - No sentences, only descriptive tags
-   - Include: camera settings, lighting, composition, product details
-   - Start with cinematic quality tags: "cinematic lighting, 8k resolution, photorealistic"
-
-## OUTPUT FORMAT - You must generate a JSON array:
-
-```json
-[
-  {
-    "shot": 1,
-    "time": "0s-3s",
-    "framing": "Medium Shot",
-    "lens": "50mm",
-    "movement": "Static",
-    "description": "Product displayed on clean white background, soft studio lighting",
-    "start_frame": "cinematic lighting, 8k resolution, photorealistic, [PRODUCT NAME] placed center frame, clean white studio background, soft diffused lighting, product in pristine condition, brand logo visible, high-end commercial photography style, shallow depth of field, Sony A7IV camera",
-    "end_frame": "cinematic lighting, 8k resolution, photorealistic, [PRODUCT NAME] center frame, product appearance unchanged, brand logo preserved, maintaining exact proportions, soft studio lighting, commercial product photography, do not change product color, do not alter logo, Sony A7IV camera",
-    "notes": "中文备注：建立产品第一印象"
-  }
-]
+## AI提示词列的 HTML 格式要求
+```html
+[Image Reference] cinematic lighting, 8k resolution, product photography...<br>
+<span style="font-size: 12px; color: #94a3b8;">(中文翻译：电影院级打光，8K分辨率，产品摄影...)</span>
 ```
 
-## REQUIREMENTS TABLE FIELDS (if provided):
-- 片段时长 (Segment Duration)
-- 镜头语言 (Camera Language)
-- 画面描述 (Visual Description)
-- 核心动作 (Core Action)
-- 核心卖点 (Core Selling Points)
-
-## PRODUCT METADATA FIELDS (required):
-- 产品名称 (Product Name)
-- 核心材质与主色调 (Core Material & Main Color)
-- 精确物理尺寸 (Exact Physical Dimensions - MANDATORY REFERENCE)
-- 画面红线 (Visual Red Lines - Forbidden Changes)
-- 产品功能 (Product Function)
-- 卖点 (Selling Points)
-
-## LIGHTING PHILOSOPHY:
-- Primary: Cinematic three-point lighting with soft fill
-- Product lighting: Edge lighting to highlight material texture
-- Ambient: Subtle environmental lighting matching product aesthetic
-
-## CAMERA ANGLES FOR COMMERCIAL:
-- Hero Shot: 45-degree angle, medium distance
-- Detail Shots: Close-up, macro capability
-- Action Shots: Dynamic angles with movement
-
-Generate a complete storyboard based on the provided data. Return ONLY valid JSON array, no other text.
+## 关键提示
+- 镜头时长建议 3-8 秒
+- 运镜方式要多样化（推、拉、摇、移、跟等）
+- 每个镜头必须有独特的视觉叙事
+- 提示词要具体、生动、可执行
+- 中文翻译要简洁、准确、与英文对应
 """
 
-
+# ==================== 路由 ====================
 @app.route('/')
 def index():
-    """渲染主页面"""
+    """主页面"""
     return render_template('index.html')
 
 
-@app.route('/api/upload', methods=['POST'])
-def upload_file():
-    """处理 CSV/Excel 文件上传，解析需求表"""
+@app.route('/api/projects', methods=['GET'])
+def list_projects():
+    """获取所有项目列表"""
     try:
-        if 'file' not in request.files:
-            return jsonify({'error': '没有文件上传'}), 400
-
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'error': '文件名为空'}), 400
-
-        # 读取文件内容
-        file_content = file.read()
-
-        # 根据文件扩展名解析
-        filename = file.filename.lower()
-
-        if filename.endswith('.csv'):
-            df = pd.read_csv(io.BytesIO(file_content))
-        elif filename.endswith(('.xlsx', '.xls')):
-            df = pd.read_excel(io.BytesIO(file_content))
-        else:
-            return jsonify({'error': '不支持的文件格式，请上传 CSV 或 Excel 文件'}), 400
-
-        # 清理 NaN 值
-        df = df.fillna('')
-
-        # 转换为字典列表，并清理所有值
-        def clean_value(v):
-            if pd.isna(v) or v is None:
-                return ''
-            if isinstance(v, float) and math.isnan(v):
-                return ''
-            return str(v).strip()
-
-        data = []
-        for _, row in df.iterrows():
-            cleaned_row = {k: clean_value(v) for k, v in row.items()}
-            data.append(cleaned_row)
-
-        # 处理列名映射（中英文兼容）
-        column_mapping = {
-            '片段时长': 'duration',
-            'duration': 'duration',
-            '镜头语言': 'camera_language',
-            'camera_language': 'camera_language',
-            '画面描述': 'visual_description',
-            'visual_description': 'visual_description',
-            '核心动作': 'core_action',
-            'core_action': 'core_action',
-            '核心卖点': 'core_selling_point',
-            'core_selling_point': 'core_selling_point'
-        }
-
-        normalized_data = []
-        for row in data:
-            normalized_row = {}
-            for key, value in row.items():
-                # 尝试匹配已知列名
-                matched_key = column_mapping.get(key, key)
-                normalized_row[matched_key] = value
-            normalized_data.append(normalized_row)
-
-        return jsonify({
-            'success': True,
-            'data': normalized_data,
-            'columns': list(df.columns)
-        })
-
+        projects = get_all_projects()
+        return jsonify({'success': True, 'projects': projects})
     except Exception as e:
-        return jsonify({'error': f'文件解析失败: {str(e)}'}), 500
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/projects/<int:project_id>', methods=['GET'])
+def get_project_detail(project_id):
+    """获取项目详情"""
+    try:
+        project = get_project(project_id)
+        if not project:
+            return jsonify({'success': False, 'error': '项目不存在'}), 404
+
+        images = get_project_images(project_id)
+        project['images'] = images
+
+        return jsonify({'success': True, 'project': project})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/projects/<int:project_id>', methods=['DELETE'])
+def delete_project_route(project_id):
+    """删除项目"""
+    try:
+        success = delete_project(project_id)
+        if success:
+            return jsonify({'success': True})
+        else:
+            return jsonify({'success': False, 'error': '项目不存在'}), 404
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/generate', methods=['POST'])
 def generate_storyboard():
     """
-    接收产品数据和表格数据，调用 AI 生成流式分镜脚本
-    使用 SSE (Server-Sent Events) 进行流式输出
+    接收产品数据和图片，调用多模态 AI 生成流式分镜脚本
     """
-    # 先获取所有需要的数据
-    data = request.get_json()
-    product_metadata = data.get('productMetadata', {})
-    table_data = data.get('tableData', [])
+    # 先获取所有数据
+    product_metadata = request.form.get('productMetadata', '{}')
+    product_metadata = json.loads(product_metadata)
+
+    # 处理上传的图片
+    images = []
+    if 'images' in request.files:
+        files = request.files.getlist('images')
+        for f in files:
+            if f and f.filename:
+                img_data = base64.b64encode(f.read()).decode('utf-8')
+                mime_type = f.content_type or 'image/jpeg'
+                images.append({
+                    'data': f"data:{mime_type};base64,{img_data}",
+                    'name': f.filename
+                })
 
     def generate():
         try:
-            # 构建用户提示
-            user_prompt = build_user_prompt(product_metadata, table_data)
+            # 构建消息内容数组（多模态）
+            message_content = []
+
+            # 添加图片（如果有）
+            for img in images:
+                message_content.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": img['data'],
+                        "detail": "high"
+                    }
+                })
+
+            # 添加用户需求文本
+            user_prompt = build_user_prompt(product_metadata)
+            message_content.append({
+                "type": "text",
+                "text": user_prompt
+            })
 
             # 发送开始信号
-            yield f"data: {json.dumps({'type': 'start', 'message': '开始生成商业分镜...'})}\n\n"
+            yield f"data: {json.dumps({'type': 'start', 'message': '🎬 开始生成商业分镜脚本...'})}\n\n"
 
             # 调用 AI 流式接口
-            full_response = []
-
             stream = client.chat.completions.create(
                 model=MODEL_NAME,
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt}
+                    {"role": "user", "content": message_content}
                 ],
                 stream=True,
                 temperature=0.7,
-                max_tokens=4000
+                max_tokens=8192
             )
 
             for chunk in stream:
                 if chunk.choices and chunk.choices[0].delta.content:
                     content = chunk.choices[0].delta.content
-                    full_response.append(content)
-
                     # 发送增量内容
                     yield f"data: {json.dumps({'type': 'chunk', 'content': content})}\n\n"
 
-            # 合并完整响应
-            complete_response = ''.join(full_response)
+            # 发送完成信号
+            yield f"data: {json.dumps({'type': 'done', 'message': '生成完成！'})}\n\n"
 
-            # 尝试解析 JSON
+            # 保存到数据库
             try:
-                # 提取 JSON（处理可能的 markdown 代码块）
-                json_str = extract_json(complete_response)
-                storyboard_data = json.loads(json_str)
+                project_name = product_metadata.get('project_name', f'项目_{datetime.now().strftime("%Y%m%d_%H%M")}')
+                product_name = product_metadata.get('product_name', '')
 
-                # 发送成功信号
-                yield f"data: {json.dumps({'type': 'success', 'data': storyboard_data})}\n\n"
+                project_id = create_project(
+                    project_name=project_name,
+                    product_name=product_name,
+                    product_material=product_metadata.get('material_color', ''),
+                    product_dimensions=product_metadata.get('dimensions', ''),
+                    product_function=product_metadata.get('function', ''),
+                    selling_points=product_metadata.get('selling_points', ''),
+                    red_lines=product_metadata.get('red_lines', '')
+                )
 
-            except json.JSONDecodeError as e:
-                # JSON 解析失败，发送原始内容
-                yield f"data: {json.dumps({'type': 'error', 'message': 'AI 输出格式异常', 'raw': complete_response})}\n\n"
+                # 保存图片
+                if images:
+                    save_project_images(project_id, images)
+
+                yield f"data: {json.dumps({'type': 'saved', 'project_id': project_id})}\n\n"
+
+            except Exception as db_err:
+                yield f"data: {json.dumps({'type': 'save_warning', 'message': f'保存失败: {str(db_err)}'})}\n\n"
 
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
@@ -250,158 +215,45 @@ def generate_storyboard():
     )
 
 
-def build_user_prompt(product_metadata: dict, table_data: list) -> str:
+def build_user_prompt(product_metadata: dict) -> str:
     """构建发送给 AI 的用户提示"""
     prompt_parts = []
 
-    # 产品元数据
-    prompt_parts.append("## PRODUCT METADATA (MUST RESPECT):")
-    prompt_parts.append(f"- Product Name: {product_metadata.get('product_name', 'N/A')}")
-    prompt_parts.append(f"- Core Material & Color: {product_metadata.get('material_color', 'N/A')}")
-    prompt_parts.append(f"- Exact Dimensions (CRITICAL - DO NOT DISTORT): {product_metadata.get('dimensions', 'N/A')}")
-    prompt_parts.append(f"- Visual Red Lines (FORBIDDEN TO CHANGE): {product_metadata.get('red_lines', 'N/A')}")
-    prompt_parts.append(f"- Product Function: {product_metadata.get('function', 'N/A')}")
-    prompt_parts.append(f"- Selling Points: {product_metadata.get('selling_points', 'N/A')}")
+    prompt_parts.append("## 产品信息")
 
-    # 需求表数据
-    if table_data:
-        prompt_parts.append("\n## REQUIREMENTS TABLE:")
-        for i, row in enumerate(table_data, 1):
-            prompt_parts.append(f"\nShot {i}:")
-            prompt_parts.append(f"- Duration: {row.get('duration', 'N/A')}")
-            prompt_parts.append(f"- Camera Language: {row.get('camera_language', 'N/A')}")
-            prompt_parts.append(f"- Visual Description: {row.get('visual_description', 'N/A')}")
-            prompt_parts.append(f"- Core Action: {row.get('core_action', 'N/A')}")
-            prompt_parts.append(f"- Core Selling Point: {row.get('core_selling_point', 'N/A')}")
-    else:
-        prompt_parts.append("\n## NO REQUIREMENTS TABLE PROVIDED - Generate a standard 6-8 shot commercial storyboard.")
+    if product_metadata.get('product_name'):
+        prompt_parts.append(f"**产品名称**: {product_metadata.get('product_name')}")
 
-    prompt_parts.append("\n\nGenerate the storyboard in the exact JSON format specified in the system prompt.")
+    if product_metadata.get('material_color'):
+        prompt_parts.append(f"**材质与颜色**: {product_metadata.get('material_color')}")
 
-    return '\n'.join(prompt_parts)
+    if product_metadata.get('dimensions'):
+        prompt_parts.append(f"**精确尺寸** (禁止变形): {product_metadata.get('dimensions')}")
 
+    if product_metadata.get('function'):
+        prompt_parts.append(f"**产品功能**: {product_metadata.get('function')}")
 
-def extract_json(text: str) -> str:
-    """从文本中提取 JSON 内容"""
-    # 尝试提取 markdown 代码块
-    if '```json' in text:
-        start = text.find('```json') + 7
-        end = text.find('```', start)
-        return text[start:end].strip()
-    elif '```' in text:
-        start = text.find('```') + 3
-        end = text.find('```', start)
-        return text[start:end].strip()
+    if product_metadata.get('selling_points'):
+        prompt_parts.append(f"**卖点**: {product_metadata.get('selling_points')}")
 
-    # 尝试找到 JSON 数组/对象的开始和结束
-    start_idx = text.find('[')
-    if start_idx == -1:
-        start_idx = text.find('{')
+    if product_metadata.get('red_lines'):
+        prompt_parts.append(f"**视觉红线** (禁止修改): {product_metadata.get('red_lines')}")
 
-    if start_idx != -1:
-        # 简单处理：返回从第一个 [ 或 { 开始的内容
-        return text[start_idx:]
+    if product_metadata.get('requirements'):
+        prompt_parts.append("\n## 镜头需求表:")
+        prompt_parts.append(product_metadata.get('requirements'))
 
-    return text
+    prompt_parts.append("\n\n请根据以上信息，生成专业的商业视频分镜脚本，包含 Midjourney/Sora 提示词。")
+
+    return "\n".join(prompt_parts)
 
 
-@app.route('/api/save', methods=['POST'])
-def save_project():
-    """保存项目到数据库"""
-    try:
-        data = request.get_json()
-        project_name = data.get('project_name', f'项目_{datetime.now().strftime("%Y%m%d_%H%M%S")}')
-        product_metadata = data.get('product_metadata', {})
-        table_data = data.get('table_data', [])
-        generated_script = data.get('generated_script', '')
-
-        db = get_db()
-        project_id = db.save_project(
-            project_name=project_name,
-            product_metadata=product_metadata,
-            raw_table_data=table_data,
-            generated_script=generated_script
-        )
-
-        return jsonify({
-            'success': True,
-            'project_id': project_id,
-            'message': '项目保存成功'
-        })
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/projects', methods=['GET'])
-def get_projects():
-    """获取所有项目历史"""
-    try:
-        db = get_db()
-        projects = db.get_all_projects()
-        return jsonify({'success': True, 'projects': projects})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/project/<int:project_id>', methods=['GET'])
-def get_project(project_id):
-    """获取单个项目详情"""
-    try:
-        db = get_db()
-        project = db.get_project(project_id)
-
-        if project:
-            return jsonify({'success': True, 'project': project})
-        else:
-            return jsonify({'error': '项目不存在'}), 404
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/project/<int:project_id>', methods=['DELETE'])
-def delete_project(project_id):
-    """删除项目"""
-    try:
-        db = get_db()
-        deleted = db.delete_project(project_id)
-
-        if deleted:
-            return jsonify({'success': True, 'message': '项目已删除'})
-        else:
-            return jsonify({'error': '项目不存在'}), 404
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/export/<int:project_id>', methods=['GET'])
-def export_project(project_id):
-    """导出项目脚本"""
-    try:
-        db = get_db()
-        project = db.get_project(project_id)
-
-        if project:
-            return jsonify({
-                'success': True,
-                'data': {
-                    'project_name': project['project_name'],
-                    'created_at': project['created_at'],
-                    'product_metadata': project['product_metadata'],
-                    'generated_script': project['generated_script']
-                }
-            })
-        else:
-            return jsonify({'error': '项目不存在'}), 404
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
+# ==================== 启动 ====================
 if __name__ == '__main__':
-    print(f"🚀 AI 商业视频制片工作台启动中...")
+    init_database()
+    print("=" * 50)
+    print("🎬 AI 商业视频制片工作台启动中...")
     print(f"📡 使用模型: {MODEL_NAME}")
     print(f"🌐 访问地址: http://localhost:5000")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    print("=" * 50)
+    app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
