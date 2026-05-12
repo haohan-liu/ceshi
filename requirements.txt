@@ -1,0 +1,8 @@
+# AI 商业视频制片工作台 - 依赖清单
+flask==3.0.0
+openai>=1.56.0
+httpx>=0.28.0
+python-dotenv==1.0.0
+flask-cors==4.0.0
+pandas>=2.0.0
+openpyxl>=3.1.0
