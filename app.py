@@ -1,6 +1,6 @@
 """
 AI 商业视频制片工作台 - Flask 后端
-双阶段工作流：产品锚定 + 分镜生成
+支持画幅比例强控
 """
 import os
 import json
@@ -27,27 +27,22 @@ except ImportError:
 
 from database import init_database, create_project, update_project, get_all_projects, get_project, delete_project
 
-# 加载环境变量
 load_dotenv()
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
 
-# API 配置
 API_KEY = os.getenv("NEW_API_KEY", os.getenv("OPENAI_API_KEY", ""))
 API_BASE = os.getenv("NEW_API_BASE_URL", os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1"))
 MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o")
 
-# 初始化 OpenAI 客户端
 client = OpenAI(api_key=API_KEY, base_url=API_BASE)
 
 
 # ==================== 图片压缩 ====================
 def compress_image(file_data, max_size=(1024, 1024), quality=85):
-    """压缩图片，减少 Base64 大小"""
     if not PIL_AVAILABLE:
         return file_data
-
     try:
         img = Image.open(BytesIO(file_data))
         if img.mode == 'RGBA':
@@ -61,79 +56,97 @@ def compress_image(file_data, max_size=(1024, 1024), quality=85):
         return file_data
 
 
-# ==================== 阶段一：产品分析 Prompt ====================
-PRODUCT_ANALYSIS_SYSTEM = """You are a senior Midjourney prompt engineer specializing in product photography.
+# ==================== Prompt 定义 ====================
+PRODUCT_ANALYSIS_SYSTEM = """You are a Midjourney prompt engineer specializing in product photography.
 
-Your task: Analyze the uploaded product images and generate a precise, pure English product appearance description.
+TASK: Analyze product images and generate a precise English product appearance description.
 
-CRITICAL RULES:
-1. Output ONLY a single line of comma-separated English tags
-2. Focus ONLY on: material, texture, color, shape, surface finish, key structural details
-3. Do NOT include any lighting, background, or environmental elements
-4. Use professional photography terms
-5. Keep it under 200 characters total
+RULES:
+1. Output ONLY comma-separated English tags
+2. Focus on: material, texture, color, shape, surface finish, structural details
+3. NO lighting, background, or environmental elements
+4. Keep under 200 characters
 
-Example output format:
-"metallic aluminum alloy, brushed surface texture, matte silver finish, cylindrical body, 15cm height, precision-machined edges, minimalist industrial design, premium build quality"
+Example: "metallic aluminum alloy, brushed surface, matte silver finish, cylindrical body, precision-machined edges, minimalist design"
 """
 
-PRODUCT_ANALYSIS_USER = """Please analyze this product image and describe its appearance in detail for Midjourney image generation.
+PRODUCT_ANALYSIS_USER = """Analyze this product image and describe its appearance for Midjourney image generation.
 
-Focus on:
-- Exact colors and color gradients
-- Material texture (matte, glossy, brushed, metallic, etc.)
-- Shape and form
-- Surface finish details
-- Key structural elements
-- Size proportions if visible
+Focus on: exact colors, material texture (matte/glossy/brushed/metallic), shape, surface finish, key structural elements, size proportions.
 
-Provide ONLY the English description tags, comma-separated, no explanations."""
+Output ONLY English tags, comma-separated."""
 
 
-# ==================== 阶段二：分镜生成 Prompt ====================
-SCRIPT_GENERATION_SYSTEM = """You are a Hollywood cinematographer and professional storyboard artist.
+def build_script_system_prompt(aspect_ratio: str) -> str:
+    """根据画幅比例构建动态 system prompt"""
+    if aspect_ratio == '9:16':
+        composition_rules = """
+【画幅与构图控制法则 - 9:16 竖屏】
+- 提示词必须包含：vertical video format, portrait orientation, tight framing, optimized for mobile
+- 产品主体必须居中或放置在垂直三分线上
+- 绝对不能超出画面边界
+- 背景简洁，聚焦纵向空间
+"""
+        ar_param = "--ar 9:16"
+    else:  # 16:9
+        composition_rules = """
+【画幅与构图控制法则 - 16:9 横屏】
+- 提示词必须包含：cinematic widescreen, landscape orientation, expansive environment, film grain
+- 强调横向空间的广阔感和电影级构图
+- 可以包含更多的环境背景元素
+- 遵循经典的三分法构图
+"""
+        ar_param = "--ar 16:9"
 
-Your task: Generate professional commercial video storyboards based on the user's requirements.
+    return f"""你是一位好莱坞 cinematographer（摄影指导）。
 
-MANDATORY OUTPUT FORMAT - You MUST output valid Markdown table:
+【铁律 1：禁止幻觉】
+- 必须严格根据用户提供的 CSV/Excel 表格数据生成镜头
+- 表格有多少行，就生成至少多少个镜头
+- 禁止自行发明任何不在表格中的镜头
+
+【铁律 2：动作拆分】
+- 如果某行包含多个动作（如"先俯拍...再侧拍..."），必须拆分为多个独立镜头
+- 每个镜头必须有明确的物理动作
+
+【铁律 3：首尾帧绑定】
+- 首帧(Start)：描述画面初始状态 + 锚定词
+- 尾帧(End)：描述动作完成后的状态 + 锚定词
+- 必须包含明确的物理动作和状态变化
+
+【铁律 4：锚定词一致性】
+- 每个首帧和尾帧必须以锚定词开头
+- 锚定词必须原封不动，不能修改
+
+{composition_rules}
+
+【铁律 5：参数强制写入 - 绝不可省略】
+- 每一个首帧和尾帧提示词的最后，必须无条件加上空格和画幅参数：{ar_param}
+- 这是 Midjourney 的标准语法，直接拼接到英文提示词末尾即可
+
+【铁律 6：产品不变形红线】
+- 无论画幅如何变化，第一阶段锚定的产品绝对不能发生任何挤压、拉伸或变形
+- 只调整构图和背景，产品保持原样
+
+【输出格式】
+输出纯 Markdown 表格：
 
 | 镜头编号 | 景别/焦段 | 画面与动作描述 | 首帧提示词(Start) | 尾帧提示词(End) |
-|---------|----------|--------------|------------------|----------------|
 
-CRITICAL CONSISTENCY RULE:
-- Every "首帧提示词" and "尾帧提示词" MUST contain the user's "锚定词" (anchor prompt) FIRST
-- The anchor prompt must appear EXACTLY as provided, then add scene-specific elements
-- Do NOT modify or paraphrase the anchor prompt
+【提示词格式（悬浮翻译）】
+<span title="中文翻译：xxx" class="cursor-help hover:text-blue-400 transition-colors">英文提示词 {ar_param}</span>
 
-PROMPT FORMAT (English only, comma-separated tags):
-- Start prompts: begin with anchor + specific scene elements
-- End prompts: begin with anchor + movement/transformation elements
-
-MANDATORY BILINGUAL FORMAT for each prompt cell:
-```
-{English prompt}
-<br><span style="font-size:12px;color:#9ca3af;">(中文：{Chinese translation})</span>
-```
-
-Example:
-```
-sleek metallic body, brushed aluminum surface, soft studio lighting, 8k, product photography, centered composition
-<br><span style="font-size:12px;color:#9ca3af;">(中文：时尚金属机身，刷纹铝面，柔和影棚灯光，8K，产品摄影，居中构图)</span>
-```
-
-Keep descriptions concise, professional, and suitable for actual video production."""
+注意：[Image Reference] 不需要翻译。"""
 
 
 # ==================== 路由 ====================
 @app.route('/')
 def index():
-    """主页面"""
     return render_template('index.html')
 
 
 @app.route('/api/projects', methods=['GET'])
 def list_projects():
-    """获取所有项目"""
     try:
         projects = get_all_projects()
         return jsonify({'success': True, 'projects': projects})
@@ -143,7 +156,6 @@ def list_projects():
 
 @app.route('/api/projects/<int:project_id>', methods=['GET'])
 def get_project_detail(project_id):
-    """获取项目详情"""
     try:
         project = get_project(project_id)
         if not project:
@@ -155,7 +167,6 @@ def get_project_detail(project_id):
 
 @app.route('/api/projects/<int:project_id>', methods=['DELETE'])
 def delete_project_route(project_id):
-    """删除项目"""
     try:
         success = delete_project(project_id)
         if success:
@@ -168,14 +179,9 @@ def delete_project_route(project_id):
 # ==================== 阶段一：产品特征提取 ====================
 @app.route('/api/analyze_product', methods=['POST'])
 def analyze_product():
-    """
-    接收产品图片，返回锚定词
-    """
     try:
-        # 获取产品名称
         product_name = request.form.get('product_name', 'Unknown Product')
 
-        # 处理图片
         images = []
         if 'images' in request.files:
             files = request.files.getlist('images')
@@ -192,19 +198,14 @@ def analyze_product():
         if not images:
             return jsonify({'success': False, 'error': '请上传至少一张产品图片'}), 400
 
-        # 构建消息内容
         message_content = []
         for img in images:
             message_content.append({
                 "type": "image_url",
                 "image_url": {"url": img['data'], "detail": "high"}
             })
-        message_content.append({
-            "type": "text",
-            "text": PRODUCT_ANALYSIS_USER
-        })
+        message_content.append({"type": "text", "text": PRODUCT_ANALYSIS_USER})
 
-        # 调用 AI
         try:
             response = client.chat.completions.create(
                 model=MODEL_NAME,
@@ -221,7 +222,6 @@ def analyze_product():
 
         anchor_prompt = response.choices[0].message.content.strip()
 
-        # 创建项目记录
         project_id = create_project(
             project_name=f"{product_name} - {datetime.now().strftime('%Y%m%d %H:%M')}",
             product_name=product_name,
@@ -239,19 +239,15 @@ def analyze_product():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-# ==================== 阶段二：分镜脚本生成（流式） ====================
+# ==================== 阶段二：分镜生成（流式） ====================
 @app.route('/api/generate_script', methods=['POST'])
 def generate_script():
-    """
-    接收需求表 + 锚定词，生成流式分镜脚本
-    """
     try:
-        # 获取数据
         anchor_prompt = request.form.get('anchor_prompt', '')
         project_id = request.form.get('project_id')
+        aspect_ratio = request.form.get('aspect_ratio', '16:9')
         requirements_content = ''
 
-        # 解析需求表
         if 'requirements' in request.files:
             file = request.files['requirements']
             if file and file.filename:
@@ -262,7 +258,6 @@ def generate_script():
                     if PANDAS_AVAILABLE:
                         try:
                             df = pd.read_excel(BytesIO(content))
-                            # 转换为 CSV 格式的纯文本
                             requirements_content = df.to_csv(index=False, encoding='utf-8')
                         except Exception as excel_err:
                             print(f"Excel 解析失败: {excel_err}")
@@ -280,17 +275,15 @@ def generate_script():
 
         def generate():
             try:
-                # 构建提示词
-                user_prompt = build_script_prompt(anchor_prompt, requirements_content)
+                system_prompt = build_script_system_prompt(aspect_ratio)
+                user_prompt = build_script_prompt(anchor_prompt, requirements_content, aspect_ratio)
 
-                # 发送开始信号
-                yield f"data: {json.dumps({'type': 'start', 'message': '开始生成专业分镜脚本...'})}\n\n"
+                yield f"data: {json.dumps({'type': 'start', 'message': f'开始生成 [{aspect_ratio}]...', 'aspect_ratio': aspect_ratio})}\n\n"
 
-                # 流式调用
                 stream = client.chat.completions.create(
                     model=MODEL_NAME,
                     messages=[
-                        {"role": "system", "content": SCRIPT_GENERATION_SYSTEM},
+                        {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
                     ],
                     stream=True,
@@ -303,23 +296,19 @@ def generate_script():
                     if chunk.choices and chunk.choices[0].delta.content:
                         content = chunk.choices[0].delta.content
                         accumulated += content
-                        # 发送增量内容
                         yield f"data: {json.dumps({'type': 'chunk', 'content': content, 'accumulated': accumulated})}\n\n"
 
-                # 完成
-                yield f"data: {json.dumps({'type': 'done', 'message': '生成完成'})}\n\n"
+                yield f"data: {json.dumps({'type': 'done', 'message': '生成完成', 'aspect_ratio': aspect_ratio})}\n\n"
 
-                # 保存到数据库
-                try:
-                    if project_id:
-                        update_project(int(project_id), storyboard_content=accumulated)
-                    yield f"data: {json.dumps({'type': 'saved', 'message': '已保存到历史记录'})}\n\n"
-                except Exception as save_err:
-                    yield f"data: {json.dumps({'type': 'save_warning', 'message': f'保存失败: {save_err}'})}\n\n"
+                if project_id:
+                    try:
+                        update_project(int(project_id), storyboard_content=accumulated, aspect_ratio=aspect_ratio)
+                        yield f"data: {json.dumps({'type': 'saved', 'message': '已保存'})}\n\n"
+                    except Exception as save_err:
+                        yield f"data: {json.dumps({'type': 'save_warning', 'message': f'保存失败: {save_err}'})}\n\n"
 
             except Exception as e:
-                error_detail = traceback.format_exc()
-                print(f"生成错误: {error_detail}")
+                print(f"生成错误: {traceback.format_exc()}")
                 yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
         return Response(
@@ -336,48 +325,66 @@ def generate_script():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-def build_script_prompt(anchor_prompt: str, requirements_content: str) -> str:
-    """构建分镜生成提示词"""
-    prompt = f"""## 产品锚定词 (ANCHOR - 必须原封不动用于所有首尾帧)
+def build_script_prompt(anchor_prompt: str, requirements_content: str, aspect_ratio: str) -> str:
+    ar_param = f"--ar {aspect_ratio}"
+    
+    prompt = f"""## 【阶段一】产品锚定词 (ANCHOR - 必须原封不动用于所有首尾帧)
 
+```
 {anchor_prompt}
+```
 
 """
 
     if requirements_content:
-        prompt += f"""## 镜头需求表
+        prompt += f"""## 【阶段二】镜头需求表 (CSV/Excel 数据)
 
+请仔细分析以下表格，生成对应数量的镜头：
+```
 {requirements_content}
+```
 
 """
 
-    prompt += """请根据以上信息，生成专业商业视频分镜脚本。
+    prompt += f"""## 【阶段三】画幅比例
 
-严格遵循以下格式输出 Markdown 表格：
+当前选择的画幅比例：**{aspect_ratio}**
+
+请在所有提示词末尾添加 Midjourney 画幅参数：`{ar_param}`
+
+"""
+
+    prompt += """## 【执行要求】
+
+1. 逐行分析表格：表格有多少行，就生成至少多少个镜头
+2. 动作拆分：某行多个动作 → 拆分为多个独立镜头
+3. 首帧提示词：画面初始状态 + 锚定词 + 构图词 + {ar_param}
+4. 尾帧提示词：动作完成后状态 + 锚定词 + 构图词 + {ar_param}
+5. 禁止发明任何不在表格中的内容
+
+## 【输出格式】
+
+直接输出 Markdown 表格：
 
 | 镜头编号 | 景别/焦段 | 画面与动作描述 | 首帧提示词(Start) | 尾帧提示词(End) |
 |---------|----------|--------------|------------------|----------------|
 
-【核心一致性法则】：
-1. 每个"首帧提示词"和"尾帧提示词"必须以锚定词开头，后面才是场景特定描述
-2. 锚定词必须完全一致，不能有任何修改
-3. 提示词必须是纯英文逗号分隔的标签
+## 【提示词格式示例】
 
-【提示词格式示例】：
-首帧: `sleek metallic body, brushed aluminum surface, cinematic soft lighting, 8k, product photography`<br>
-      `<span style="font-size:12px;color:#9ca3af;">(中文：时尚金属机身，刷纹铝面，电影级柔和灯光，8K，产品摄影)</span>`
+<span title="中文翻译：时尚金属机身，刷纹铝面，柔和灯光，电影级构图" class="cursor-help hover:text-blue-400 transition-colors">metallic aluminum, brushed surface, soft lighting, 8k, product photography, cinematic composition, golden ratio centering {ar_param}</span>
 
-请立即开始生成 Markdown 表格："""
+请立即开始生成："""
 
+    prompt = prompt.replace("{ar_param}", ar_param)
     return prompt
 
 
 # ==================== 启动 ====================
 if __name__ == '__main__':
     init_database()
-    print("=" * 60)
+    print("=" * 50)
     print("  AI 商业视频制片工作台")
-    print("  模型: " + MODEL_NAME)
+    print(f"  模型: {MODEL_NAME}")
     print("  访问: http://localhost:5000")
-    print("=" * 60)
+    print("=" * 50)
     app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)

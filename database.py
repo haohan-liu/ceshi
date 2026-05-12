@@ -21,6 +21,7 @@ def init_database():
     conn = get_connection()
     cursor = conn.cursor()
 
+    # 创建主表
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS projects (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,10 +29,17 @@ def init_database():
             product_name TEXT,
             anchor_prompt TEXT,
             storyboard_content TEXT,
+            aspect_ratio TEXT DEFAULT '16:9',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+
+    # 迁移旧数据：添加 aspect_ratio 列（如果不存在）
+    try:
+        cursor.execute("ALTER TABLE projects ADD COLUMN aspect_ratio TEXT DEFAULT '16:9'")
+    except sqlite3.OperationalError:
+        pass  # 列已存在
 
     conn.commit()
     conn.close()
@@ -41,16 +49,17 @@ def create_project(
     project_name: str,
     product_name: str = None,
     anchor_prompt: str = None,
-    storyboard_content: str = None
+    storyboard_content: str = None,
+    aspect_ratio: str = '16:9'
 ) -> int:
     """创建新项目"""
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute('''
-        INSERT INTO projects (project_name, product_name, anchor_prompt, storyboard_content)
-        VALUES (?, ?, ?, ?)
-    ''', (project_name, product_name, anchor_prompt, storyboard_content))
+        INSERT INTO projects (project_name, product_name, anchor_prompt, storyboard_content, aspect_ratio)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (project_name, product_name, anchor_prompt, storyboard_content, aspect_ratio))
 
     project_id = cursor.lastrowid
     conn.commit()
@@ -62,25 +71,36 @@ def create_project(
 def update_project(
     project_id: int,
     anchor_prompt: str = None,
-    storyboard_content: str = None
+    storyboard_content: str = None,
+    aspect_ratio: str = None
 ):
     """更新项目内容"""
     conn = get_connection()
     cursor = conn.cursor()
 
+    updates = []
+    params = []
+
     if anchor_prompt is not None:
-        cursor.execute('''
-            UPDATE projects
-            SET anchor_prompt = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-        ''', (anchor_prompt, project_id))
+        updates.append("anchor_prompt = ?")
+        params.append(anchor_prompt)
 
     if storyboard_content is not None:
-        cursor.execute('''
+        updates.append("storyboard_content = ?")
+        params.append(storyboard_content)
+
+    if aspect_ratio is not None:
+        updates.append("aspect_ratio = ?")
+        params.append(aspect_ratio)
+
+    if updates:
+        updates.append("updated_at = CURRENT_TIMESTAMP")
+        params.append(project_id)
+        cursor.execute(f'''
             UPDATE projects
-            SET storyboard_content = ?, updated_at = CURRENT_TIMESTAMP
+            SET {', '.join(updates)}
             WHERE id = ?
-        ''', (storyboard_content, project_id))
+        ''', params)
 
     conn.commit()
     conn.close()
@@ -92,7 +112,7 @@ def get_all_projects() -> List[Dict[str, Any]]:
     cursor = conn.cursor()
 
     cursor.execute('''
-        SELECT id, project_name, product_name, created_at, updated_at
+        SELECT id, project_name, product_name, aspect_ratio, created_at, updated_at
         FROM projects
         ORDER BY updated_at DESC
     ''')
