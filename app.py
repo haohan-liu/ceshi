@@ -6,12 +6,20 @@ import os
 import json
 import base64
 import uuid
+import traceback
 from datetime import datetime
 from io import BytesIO
 
 from flask import Flask, render_template, request, jsonify, Response
 from openai import OpenAI
+from openai import APIError, RateLimitError, APITimeoutError
 from dotenv import load_dotenv
+
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
 
 from database import (
     init_database, create_project, update_project,
@@ -23,7 +31,7 @@ from database import (
 load_dotenv()
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max
 
 # API 配置
 API_KEY = os.getenv("NEW_API_KEY", os.getenv("OPENAI_API_KEY", ""))
@@ -32,6 +40,42 @@ MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o")
 
 # 初始化 OpenAI 客户端
 client = OpenAI(api_key=API_KEY, base_url=API_BASE)
+
+# 图片压缩函数
+def compress_image(file_data, max_size=(1024, 1024), quality=85):
+    """压缩图片，减少 Base64 大小"""
+    if not PIL_AVAILABLE:
+        return file_data
+
+    try:
+        img = Image.open(BytesIO(file_data))
+        # 转换为 RGB（如果是 RGBA）
+        if img.mode == 'RGBA':
+            img = img.convert('RGB')
+
+        # 缩放图片
+        img.thumbnail(max_size, Image.Resampling.LANCZOS)
+
+        # 保存为 JPEG
+        output = BytesIO()
+        img.save(output, format='JPEG', quality=quality, optimize=True)
+        return output.getvalue()
+    except Exception as e:
+        print(f"图片压缩失败: {e}")
+        return file_data
+
+# 测试连接
+def test_api_connection():
+    """测试 API 连接"""
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": "hi"}],
+            max_tokens=5
+        )
+        return True, "连接成功"
+    except Exception as e:
+        return False, str(e)
 
 # ==================== 系统提示词 ====================
 SYSTEM_PROMPT = """你是好莱坞级灯光摄影指导与 Midjourney/Sora 资深提示词工程师。
@@ -120,12 +164,26 @@ def generate_storyboard():
 
     # 处理上传的图片
     images = []
+    total_size = 0
     if 'images' in request.files:
         files = request.files.getlist('images')
         for f in files:
             if f and f.filename:
-                img_data = base64.b64encode(f.read()).decode('utf-8')
-                mime_type = f.content_type or 'image/jpeg'
+                # 读取原始数据
+                original_data = f.read()
+                f.seek(0)  # 重置文件指针
+
+                # 压缩图片
+                compressed_data = compress_image(original_data)
+                img_data = base64.b64encode(compressed_data).decode('utf-8')
+                total_size += len(img_data)
+
+                # 检查总大小，超过 20MB 就跳过剩余图片
+                if total_size > 20 * 1024 * 1024:
+                    print(f"警告: 图片总大小超过 20MB，跳过剩余图片")
+                    break
+
+                mime_type = 'image/jpeg'  # 压缩后统一转为 JPEG
                 images.append({
                     'data': f"data:{mime_type};base64,{img_data}",
                     'name': f.filename
@@ -157,16 +215,22 @@ def generate_storyboard():
             yield f"data: {json.dumps({'type': 'start', 'message': '🎬 开始生成商业分镜脚本...'})}\n\n"
 
             # 调用 AI 流式接口
-            stream = client.chat.completions.create(
-                model=MODEL_NAME,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": message_content}
-                ],
-                stream=True,
-                temperature=0.7,
-                max_tokens=8192
-            )
+            try:
+                stream = client.chat.completions.create(
+                    model=MODEL_NAME,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": message_content}
+                    ],
+                    stream=True,
+                    temperature=0.7,
+                    max_tokens=8192
+                )
+            except Exception as api_error:
+                error_msg = str(api_error)
+                print(f"API 调用错误: {error_msg}")
+                yield f"data: {json.dumps({'type': 'error', 'message': f'API 调用失败: {error_msg}'})}\n\n"
+                return
 
             for chunk in stream:
                 if chunk.choices and chunk.choices[0].delta.content:
@@ -202,7 +266,9 @@ def generate_storyboard():
                 yield f"data: {json.dumps({'type': 'save_warning', 'message': f'保存失败: {str(db_err)}'})}\n\n"
 
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            error_detail = traceback.format_exc()
+            print(f"生成错误: {error_detail}")
+            yield f"data: {json.dumps({'type': 'error', 'message': f'生成失败: {str(e)}'})}\n\n"
 
     return Response(
         generate(),

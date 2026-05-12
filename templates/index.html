@@ -419,27 +419,77 @@
         }
 
         // 处理图片文件
-        function handleImageFiles(files) {
+        async function handleImageFiles(files) {
             const remaining = 10 - uploadedImages.length;
             const toAdd = Array.from(files).slice(0, remaining);
 
-            toAdd.forEach(file => {
+            for (const file of toAdd) {
                 if (file.type.startsWith('image/')) {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        uploadedImages.push({
-                            file: file,
-                            preview: e.target.result
-                        });
-                        renderImagePreviews();
-                    };
-                    reader.readAsDataURL(file);
+                    try {
+                        const compressed = await compressImageFile(file);
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            uploadedImages.push({
+                                file: compressed,
+                                preview: e.target.result,
+                                name: file.name
+                            });
+                            renderImagePreviews();
+                        };
+                        reader.readAsDataURL(compressed);
+                    } catch (err) {
+                        console.error('图片处理失败:', err);
+                    }
                 }
-            });
+            }
 
             if (files.length > remaining) {
                 showToast(`最多只能上传 10 张图片，已添加 ${remaining} 张`, 'warning');
             }
+        }
+
+        // 压缩图片
+        async function compressImageFile(file, maxWidth = 1024, maxHeight = 1024, quality = 0.8) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+
+                    // 计算缩放比例
+                    if (width > maxWidth || height > maxHeight) {
+                        const ratio = Math.min(maxWidth / width, maxHeight / height);
+                        width = Math.round(width * ratio);
+                        height = Math.round(height * ratio);
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    canvas.toBlob(
+                        (blob) => {
+                            if (blob) {
+                                // 如果压缩后反而更大，就用原图
+                                if (blob.size > file.size) {
+                                    resolve(file);
+                                } else {
+                                    resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+                                }
+                            } else {
+                                resolve(file);
+                            }
+                        },
+                        'image/jpeg',
+                        quality
+                    );
+                };
+                img.onerror = reject;
+                img.src = URL.createObjectURL(file);
+            });
         }
 
         // 渲染图片预览
