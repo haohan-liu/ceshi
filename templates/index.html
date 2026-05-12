@@ -10,326 +10,342 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; }
-        .markdown-body { box-sizing: border-box; }
-        .markdown-body pre { background: #1e293b; border-radius: 8px; padding: 16px; overflow-x: auto; }
-        .markdown-body code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
-        .markdown-body pre code { background: transparent; padding: 0; }
-        .markdown-body table { border-collapse: collapse; width: 100%; margin: 16px 0; }
-        .markdown-body table th { background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; text-align: left; font-weight: 600; }
-        .markdown-body table td { border: 1px solid #e2e8f0; padding: 12px; vertical-align: top; }
-        .markdown-body table tr:nth-child(even) { background: #f8fafc; }
+
+        /* 控制台样式 */
+        .console-output {
+            font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+            line-height: 1.7;
+        }
+        .console-output table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 16px 0;
+        }
+        .console-output table th {
+            background: #334155;
+            border: 1px solid #475569;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #e2e8f0;
+        }
+        .console-output table td {
+            border: 1px solid #475569;
+            padding: 10px;
+            vertical-align: top;
+            color: #e2e8f0;
+        }
+        .console-output table tr:nth-child(even) {
+            background: #1e293b;
+        }
+        .console-output pre {
+            background: #1e293b;
+            border-radius: 6px;
+            padding: 12px;
+            overflow-x: auto;
+        }
+        .console-output code {
+            background: #334155;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #a5f3fc;
+        }
+        .console-output pre code {
+            background: transparent;
+            padding: 0;
+        }
+
+        /* 打字机光标 */
+        .typing-cursor::after {
+            content: '▋';
+            animation: blink 1s infinite;
+            color: #06b6d4;
+        }
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+
+        /* 滚动条 */
         .scrollbar-thin::-webkit-scrollbar { width: 6px; }
-        .scrollbar-thin::-webkit-scrollbar-track { background: #f1f5f9; }
-        .scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-        .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        .pulse-dot { animation: pulse 2s infinite; }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: #1e293b; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+        /* 图片预览 */
+        .image-preview-card {
+            position: relative;
+            aspect-ratio: 1;
+            overflow: hidden;
+            border-radius: 8px;
+            border: 2px solid #e2e8f0;
+            transition: all 0.2s;
         }
-        .fade-in { animation: fadeIn 0.3s ease-in; }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+        .image-preview-card:hover {
+            border-color: #818cf8;
+            transform: scale(1.02);
         }
-        .image-preview {
-            transition: all 0.2s ease;
+        .image-preview-card img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
-        .image-preview:hover {
-            transform: scale(1.05);
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
+        .image-preview-card .delete-btn {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 24px;
+            height: 24px;
+            background: #ef4444;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.2s;
+            cursor: pointer;
         }
-        .loading-shimmer {
-            background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
-            background-size: 200% 100%;
-            animation: shimmer 1.5s infinite;
+        .image-preview-card:hover .delete-btn {
+            opacity: 1;
         }
-        @keyframes shimmer {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
+        .image-preview-card .delete-btn svg {
+            width: 14px;
+            height: 14px;
+            color: white;
+        }
+
+        /* 加载动画 */
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid #475569;
+            border-top-color: #06b6d4;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 12px 20px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-size: 14px;
+            z-index: 1000;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
         }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen">
-    <div class="flex min-h-screen">
-        <!-- 左侧边栏 - 历史项目 -->
-        <aside class="w-80 bg-white border-r border-slate-200 flex flex-col shadow-sm">
-            <!-- Logo 区域 -->
-            <div class="p-6 border-b border-slate-100">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
-                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-                        </svg>
-                    </div>
-                    <div>
-                        <h1 class="text-lg font-bold text-slate-800">视频制片工作台</h1>
-                        <p class="text-xs text-slate-500">AI 商业视频分镜生成</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 新建项目按钮 -->
-            <div class="p-4">
-                <button onclick="createNewProject()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-4 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/25">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+    <!-- 顶部导航 -->
+    <nav class="bg-white border-b border-slate-200 px-6 py-4">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
                     </svg>
-                    新建项目
-                </button>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold text-slate-800">AI 商业视频制片工作台</h1>
+                    <p class="text-xs text-slate-500">多模态智能分镜生成系统</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 text-sm text-slate-500">
+                <span class="w-2 h-2 bg-emerald-500 rounded-full"></span>
+                系统就绪
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主体区域 -->
+    <div class="grid grid-cols-12 min-h-[calc(100vh-73px)]">
+        <!-- 左侧控制区 -->
+        <aside class="col-span-4 bg-white border-r border-slate-200 flex flex-col overflow-hidden">
+            <!-- 历史记录 -->
+            <div class="p-4 border-b border-slate-200">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-semibold text-slate-700">历史项目</h3>
+                    <button onclick="clearConsole()" class="text-xs text-slate-400 hover:text-slate-600">清空控制台</button>
+                </div>
+                <div id="projectList" class="space-y-2 max-h-48 overflow-y-auto scrollbar-thin">
+                    <p class="text-xs text-slate-400 text-center py-4">暂无历史项目</p>
+                </div>
             </div>
 
-            <!-- 项目列表 -->
-            <div class="flex-1 overflow-y-auto scrollbar-thin p-4" id="projectList">
-                <div class="text-xs font-medium text-slate-400 uppercase tracking-wider mb-3">历史项目</div>
-                <div id="projectsContainer" class="space-y-2">
-                    <!-- 项目列表将动态加载 -->
+            <!-- 阶段一：产品锚定 -->
+            <div class="p-4 border-b border-slate-200">
+                <div class="flex items-center gap-2 mb-4">
+                    <div class="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs flex items-center justify-center font-medium">1</div>
+                    <h3 class="text-sm font-semibold text-slate-700">阶段一：产品资产锚定</h3>
                 </div>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">产品名称</label>
+                        <input type="text" id="productName" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none" placeholder="输入产品名称">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">产品参考图 (最多5张)</label>
+                        <div id="uploadZone1" class="border-2 border-dashed border-slate-200 rounded-lg p-4 text-center hover:border-indigo-400 transition-colors cursor-pointer">
+                            <input type="file" id="productImages" multiple accept="image/*" class="hidden">
+                            <svg class="w-8 h-8 mx-auto text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                            </svg>
+                            <p class="text-xs text-slate-400">点击上传产品图片</p>
+                        </div>
+                        <div id="imagePreviewGrid" class="grid grid-cols-5 gap-2 mt-2"></div>
+                    </div>
+
+                    <button onclick="analyzeProduct()" id="analyzeBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                        </svg>
+                        提取产品特征
+                    </button>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">锚定词 (Anchor Prompt)</label>
+                        <textarea id="anchorPrompt" rows="3" class="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none resize-none" placeholder="AI 提取的产品特征将显示在这里，可手动编辑"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 阶段二：分镜生成 -->
+            <div class="p-4 flex-1 overflow-y-auto">
+                <div class="flex items-center gap-2 mb-4">
+                    <div class="w-6 h-6 rounded-full bg-purple-600 text-white text-xs flex items-center justify-center font-medium">2</div>
+                    <h3 class="text-sm font-semibold text-slate-700">阶段二：分镜脚本生成</h3>
+                </div>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">镜头需求表 (CSV/Excel)</label>
+                        <div id="uploadZone2" class="border-2 border-dashed border-slate-200 rounded-lg p-4 text-center hover:border-purple-400 transition-colors cursor-pointer">
+                            <input type="file" id="requirementsFile" accept=".csv,.xlsx,.xls" class="hidden">
+                            <svg class="w-8 h-8 mx-auto text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            <p class="text-xs text-slate-400">点击上传需求表</p>
+                        </div>
+                        <div id="fileInfo" class="hidden mt-2 p-2 bg-slate-50 rounded-lg flex items-center justify-between">
+                            <span id="fileName" class="text-xs text-slate-600 truncate"></span>
+                            <button onclick="removeFile()" class="text-slate-400 hover:text-red-500">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button onclick="generateScript()" id="generateBtn" class="w-full bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                        生成专业脚本
+                    </button>
+
+                    <div class="text-xs text-slate-400 space-y-1">
+                        <p>1. 先上传产品图，点击"提取产品特征"</p>
+                        <p>2. 确认锚定词后，上传需求表</p>
+                        <p>3. 点击"生成专业脚本"</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 版权信息 -->
+            <div class="p-4 border-t border-slate-200 text-center">
+                <p class="text-xs text-slate-400">© 2026 浩涵 All Rights Reserved</p>
             </div>
         </aside>
 
-        <!-- 主工作区 -->
-        <main class="flex-1 overflow-y-auto scrollbar-thin">
-            <div class="max-w-5xl mx-auto p-8">
-                <!-- 页面标题 -->
-                <div class="mb-8">
-                    <h2 class="text-2xl font-bold text-slate-800">新建商业视频分镜</h2>
-                    <p class="text-slate-500 mt-1">填写产品信息，上传参考图，AI 将为您生成专业的分镜脚本</p>
+        <!-- 右侧制片控制台 -->
+        <main class="col-span-8 bg-slate-900 flex flex-col">
+            <!-- 控制台头部 -->
+            <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between bg-slate-800">
+                <div class="flex items-center gap-3">
+                    <div class="flex gap-1.5">
+                        <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                        <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                        <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                    </div>
+                    <span class="text-sm text-slate-400 font-mono">制片控制台 (Console)</span>
                 </div>
+                <div class="flex items-center gap-3">
+                    <button onclick="copyConsole()" class="text-xs text-slate-400 hover:text-white transition-colors">复制</button>
+                    <button onclick="downloadConsole()" class="text-xs text-slate-400 hover:text-white transition-colors">下载</button>
+                </div>
+            </div>
 
-                <!-- 主工作卡片 -->
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                    <!-- 步骤指示器 -->
-                    <div class="border-b border-slate-100 px-6 py-4">
-                        <div class="flex items-center gap-2">
-                            <div class="flex items-center gap-2" id="step1Indicator">
-                                <div class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center text-sm font-medium">1</div>
-                                <span class="text-sm font-medium text-slate-700">产品信息</span>
-                            </div>
-                            <div class="flex-1 h-px bg-slate-200 mx-4"></div>
-                            <div class="flex items-center gap-2 opacity-50" id="step2Indicator">
-                                <div class="w-8 h-8 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center text-sm font-medium">2</div>
-                                <span class="text-sm font-medium text-slate-500">生成结果</span>
-                            </div>
-                        </div>
-                    </div>
+            <!-- 控制台内容 -->
+            <div id="console" class="flex-1 p-6 overflow-y-auto scrollbar-thin console-output">
+                <div class="text-center text-slate-500 py-12">
+                    <svg class="w-16 h-16 mx-auto text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    </svg>
+                    <p class="text-lg font-medium text-slate-400">等待指令</p>
+                    <p class="text-sm mt-1">请在左侧完成产品锚定后生成分镜脚本</p>
+                </div>
+            </div>
 
-                    <!-- Step 1: 产品信息表单 -->
-                    <div id="step1" class="p-6">
-                        <form id="productForm" class="space-y-8">
-                            <!-- 项目名称 -->
-                            <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-2">项目名称</label>
-                                <input type="text" name="project_name" required
-                                    class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
-                                    placeholder="例如：XXX产品商业视频">
-                            </div>
-
-                            <!-- 产品基本信息 -->
-                            <div class="grid grid-cols-2 gap-6">
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-2">产品名称</label>
-                                    <input type="text" name="product_name"
-                                        class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
-                                        placeholder="产品名称">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-2">材质与颜色</label>
-                                    <input type="text" name="material_color"
-                                        class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
-                                        placeholder="例如：铝合金，银灰色">
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-2 gap-6">
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-2">精确尺寸</label>
-                                    <input type="text" name="dimensions"
-                                        class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
-                                        placeholder="例如：120×60×80cm">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-2">产品功能</label>
-                                    <input type="text" name="function"
-                                        class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
-                                        placeholder="产品的主要功能">
-                                </div>
-                            </div>
-
-                            <!-- 卖点 -->
-                            <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-2">卖点描述</label>
-                                <textarea name="selling_points" rows="2"
-                                    class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all resize-none"
-                                    placeholder="产品的核心卖点，用于吸引消费者"></textarea>
-                            </div>
-
-                            <!-- 视觉红线 -->
-                            <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-2">
-                                    视觉红线
-                                    <span class="text-slate-400 font-normal ml-1">(禁止修改的视觉元素)</span>
-                                </label>
-                                <textarea name="red_lines" rows="2"
-                                    class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all resize-none"
-                                    placeholder="例如：Logo位置、产品比例、颜色准确性"></textarea>
-                            </div>
-
-                            <!-- 需求表上传 -->
-                            <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-2">
-                                    镜头需求表
-                                    <span class="text-slate-400 font-normal ml-1">(可选上传 CSV/Excel)</span>
-                                </label>
-                                <div class="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-indigo-400 transition-colors cursor-pointer" id="uploadZone">
-                                    <input type="file" id="requirementsFile" name="requirements" accept=".csv,.xlsx,.xls" class="hidden">
-                                    <svg class="w-10 h-10 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                                    </svg>
-                                    <p class="text-slate-500 mb-1">点击或拖拽上传需求表</p>
-                                    <p class="text-xs text-slate-400">支持 CSV、Excel 格式</p>
-                                </div>
-                                <div id="fileInfo" class="hidden mt-3 p-3 bg-slate-50 rounded-lg flex items-center justify-between">
-                                    <div class="flex items-center gap-3">
-                                        <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                                        </svg>
-                                        <span id="fileName" class="text-sm text-slate-700"></span>
-                                    </div>
-                                    <button type="button" onclick="removeFile()" class="text-slate-400 hover:text-red-500 transition-colors">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                                        </svg>
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- 产品参考图上传 -->
-                            <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-2">
-                                    产品参考图
-                                    <span class="text-slate-400 font-normal ml-1">(最多 10 张，支持 AI 视觉分析)</span>
-                                </label>
-                                <div class="border-2 border-dashed border-slate-200 rounded-xl p-6 hover:border-indigo-400 transition-colors cursor-pointer" id="imageUploadZone">
-                                    <input type="file" id="imageFiles" name="images" multiple accept="image/*" class="hidden">
-                                    <svg class="w-10 h-10 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                                    </svg>
-                                    <p class="text-slate-500 mb-1">点击或拖拽上传产品图片</p>
-                                    <p class="text-xs text-slate-400">支持 JPG、PNG、WebP 格式</p>
-                                </div>
-                                <!-- 图片预览网格 -->
-                                <div id="imagePreview" class="grid grid-cols-5 gap-4 mt-4"></div>
-                            </div>
-
-                            <!-- 提交按钮 -->
-                            <div class="flex justify-end pt-4">
-                                <button type="submit" id="submitBtn"
-                                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-8 rounded-xl transition-all duration-200 flex items-center gap-2 shadow-lg shadow-indigo-500/25 disabled:opacity-50 disabled:cursor-not-allowed">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                                    </svg>
-                                    开始生成分镜
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-
-                    <!-- Step 2: 生成结果 -->
-                    <div id="step2" class="hidden p-6">
-                        <!-- 生成状态 -->
-                        <div id="generatingState" class="hidden">
-                            <div class="flex items-center justify-center py-12">
-                                <div class="text-center">
-                                    <div class="w-16 h-16 mx-auto mb-4 relative">
-                                        <div class="absolute inset-0 border-4 border-indigo-200 rounded-full"></div>
-                                        <div class="absolute inset-0 border-4 border-indigo-600 rounded-full border-t-transparent animate-spin"></div>
-                                    </div>
-                                    <p class="text-slate-600 font-medium" id="generatingMessage">正在生成...</p>
-                                    <p class="text-xs text-slate-400 mt-2">请稍候，AI 正在创作中</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 生成结果 -->
-                        <div id="resultState" class="hidden">
-                            <!-- 操作栏 -->
-                            <div class="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
-                                <div class="flex items-center gap-2">
-                                    <div class="w-3 h-3 rounded-full bg-emerald-500"></div>
-                                    <span class="text-sm font-medium text-emerald-600">生成完成</span>
-                                </div>
-                                <div class="flex items-center gap-3">
-                                    <button onclick="copyResult()" class="text-slate-500 hover:text-slate-700 transition-colors flex items-center gap-1.5 text-sm">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-                                        </svg>
-                                        复制
-                                    </button>
-                                    <button onclick="downloadResult()" class="text-slate-500 hover:text-slate-700 transition-colors flex items-center gap-1.5 text-sm">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-                                        </svg>
-                                        下载
-                                    </button>
-                                    <button onclick="resetForm()" class="text-indigo-600 hover:text-indigo-700 transition-colors flex items-center gap-1.5 text-sm font-medium">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                                        </svg>
-                                        新建项目
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- Markdown 结果 -->
-                            <div id="storyboardResult" class="markdown-body prose prose-slate max-w-none min-h-[400px] p-4 bg-slate-50 rounded-xl"></div>
-                        </div>
-                    </div>
+            <!-- 控制台状态栏 -->
+            <div class="px-4 py-2 border-t border-slate-700 bg-slate-800 flex items-center justify-between text-xs">
+                <div class="flex items-center gap-4">
+                    <span id="statusText" class="text-slate-400">就绪</span>
+                </div>
+                <div class="flex items-center gap-2 text-slate-500">
+                    <span id="charCount">0</span> chars
                 </div>
             </div>
         </main>
     </div>
 
-    <!-- Toast 通知 -->
-    <div id="toast" class="fixed bottom-6 right-6 transform translate-y-full opacity-0 transition-all duration-300 pointer-events-none z-50">
-        <div class="bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3">
-            <svg id="toastIcon" class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-            </svg>
-            <span id="toastMessage" class="text-sm">操作成功</span>
-        </div>
-    </div>
+    <!-- Toast -->
+    <div id="toast" class="toast"></div>
 
     <script>
-        // 全局变量
+        // ==================== 全局状态 ====================
         let uploadedImages = [];
-        let currentResult = '';
+        let currentProjectId = null;
+        let accumulatedContent = '';
 
-        // 初始化
+        // ==================== 初始化 ====================
         document.addEventListener('DOMContentLoaded', () => {
             loadProjects();
-            setupUploadZone();
-            setupImageUploadZone();
-            setupFormSubmit();
+            setupUploadZones();
         });
 
-        // 加载项目列表
+        // ==================== 加载历史项目 ====================
         async function loadProjects() {
             try {
                 const response = await fetch('/api/projects');
                 const data = await response.json();
-
-                const container = document.getElementById('projectsContainer');
+                const container = document.getElementById('projectList');
 
                 if (data.projects && data.projects.length > 0) {
-                    container.innerHTML = data.projects.map(project => `
-                        <div class="project-item p-3 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors group" onclick="loadProject(${project.id})">
+                    container.innerHTML = data.projects.map(p => `
+                        <div class="p-2 rounded-lg hover:bg-slate-50 cursor-pointer group transition-colors" onclick="loadProject(${p.id})">
                             <div class="flex items-center justify-between">
                                 <div class="flex-1 min-w-0">
-                                    <p class="text-sm font-medium text-slate-700 truncate">${escapeHtml(project.project_name)}</p>
-                                    <p class="text-xs text-slate-400 mt-0.5">${formatDate(project.updated_at)}</p>
+                                    <p class="text-sm text-slate-700 truncate">${escapeHtml(p.project_name)}</p>
+                                    <p class="text-xs text-slate-400">${formatDate(p.updated_at || p.created_at)}</p>
                                 </div>
-                                <button onclick="event.stopPropagation(); deleteProject(${project.id})" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all p-1">
+                                <button onclick="event.stopPropagation(); deleteProject(${p.id})" class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 p-1">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                                     </svg>
@@ -338,89 +354,50 @@
                         </div>
                     `).join('');
                 } else {
-                    container.innerHTML = '<p class="text-sm text-slate-400 text-center py-4">暂无历史项目</p>';
+                    container.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">暂无历史项目</p>';
                 }
             } catch (error) {
                 console.error('加载项目失败:', error);
             }
         }
 
-        // 设置需求表上传区
-        function setupUploadZone() {
-            const zone = document.getElementById('uploadZone');
-            const input = document.getElementById('requirementsFile');
-
-            zone.addEventListener('click', () => input.click());
-
-            zone.addEventListener('dragover', (e) => {
+        // ==================== 设置上传区 ====================
+        function setupUploadZones() {
+            // 产品图片上传
+            const zone1 = document.getElementById('uploadZone1');
+            const input1 = document.getElementById('productImages');
+            zone1.addEventListener('click', () => input1.click());
+            zone1.addEventListener('dragover', e => { e.preventDefault(); zone1.classList.add('border-indigo-400', 'bg-indigo-50'); });
+            zone1.addEventListener('dragleave', () => zone1.classList.remove('border-indigo-400', 'bg-indigo-50'));
+            zone1.addEventListener('drop', e => {
                 e.preventDefault();
-                zone.classList.add('border-indigo-400', 'bg-indigo-50');
+                zone1.classList.remove('border-indigo-400', 'bg-indigo-50');
+                handleImageFiles(e.dataTransfer.files);
             });
+            input1.addEventListener('change', () => handleImageFiles(input1.files));
 
-            zone.addEventListener('dragleave', () => {
-                zone.classList.remove('border-indigo-400', 'bg-indigo-50');
-            });
-
-            zone.addEventListener('drop', (e) => {
+            // 需求表上传
+            const zone2 = document.getElementById('uploadZone2');
+            const input2 = document.getElementById('requirementsFile');
+            zone2.addEventListener('click', () => input2.click());
+            zone2.addEventListener('dragover', e => { e.preventDefault(); zone2.classList.add('border-purple-400', 'bg-purple-50'); });
+            zone2.addEventListener('dragleave', () => zone2.classList.remove('border-purple-400', 'bg-purple-50'));
+            zone2.addEventListener('drop', e => {
                 e.preventDefault();
-                zone.classList.remove('border-indigo-400', 'bg-indigo-50');
+                zone2.classList.remove('border-purple-400', 'bg-purple-50');
                 if (e.dataTransfer.files.length) {
-                    input.files = e.dataTransfer.files;
+                    input2.files = e.dataTransfer.files;
                     showFileInfo(e.dataTransfer.files[0]);
                 }
             });
-
-            input.addEventListener('change', () => {
-                if (input.files.length) {
-                    showFileInfo(input.files[0]);
-                }
+            input2.addEventListener('change', () => {
+                if (input2.files.length) showFileInfo(input2.files[0]);
             });
         }
 
-        // 显示文件信息
-        function showFileInfo(file) {
-            const fileInfo = document.getElementById('fileInfo');
-            const fileName = document.getElementById('fileName');
-            fileName.textContent = file.name;
-            fileInfo.classList.remove('hidden');
-        }
-
-        // 移除文件
-        function removeFile() {
-            document.getElementById('requirementsFile').value = '';
-            document.getElementById('fileInfo').classList.add('hidden');
-        }
-
-        // 设置图片上传区
-        function setupImageUploadZone() {
-            const zone = document.getElementById('imageUploadZone');
-            const input = document.getElementById('imageFiles');
-
-            zone.addEventListener('click', () => input.click());
-
-            zone.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                zone.classList.add('border-indigo-400', 'bg-indigo-50');
-            });
-
-            zone.addEventListener('dragleave', () => {
-                zone.classList.remove('border-indigo-400', 'bg-indigo-50');
-            });
-
-            zone.addEventListener('drop', (e) => {
-                e.preventDefault();
-                zone.classList.remove('border-indigo-400', 'bg-indigo-50');
-                handleImageFiles(e.dataTransfer.files);
-            });
-
-            input.addEventListener('change', () => {
-                handleImageFiles(input.files);
-            });
-        }
-
-        // 处理图片文件
+        // ==================== 图片处理 ====================
         async function handleImageFiles(files) {
-            const remaining = 10 - uploadedImages.length;
+            const remaining = 5 - uploadedImages.length;
             const toAdd = Array.from(files).slice(0, remaining);
 
             for (const file of toAdd) {
@@ -444,47 +421,29 @@
             }
 
             if (files.length > remaining) {
-                showToast(`最多只能上传 10 张图片，已添加 ${remaining} 张`, 'warning');
+                showToast(`最多上传 5 张图片`);
             }
         }
 
-        // 压缩图片
-        async function compressImageFile(file, maxWidth = 1024, maxHeight = 1024, quality = 0.8) {
+        async function compressImageFile(file, maxSize = 1024, quality = 0.8) {
             return new Promise((resolve, reject) => {
                 const img = new Image();
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
                     let width = img.width;
                     let height = img.height;
-
-                    // 计算缩放比例
-                    if (width > maxWidth || height > maxHeight) {
-                        const ratio = Math.min(maxWidth / width, maxHeight / height);
+                    if (width > maxSize || height > maxSize) {
+                        const ratio = Math.min(maxSize / width, maxSize / height);
                         width = Math.round(width * ratio);
                         height = Math.round(height * ratio);
                     }
-
                     canvas.width = width;
                     canvas.height = height;
-
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
-
                     canvas.toBlob(
-                        (blob) => {
-                            if (blob) {
-                                // 如果压缩后反而更大，就用原图
-                                if (blob.size > file.size) {
-                                    resolve(file);
-                                } else {
-                                    resolve(new File([blob], file.name, { type: 'image/jpeg' }));
-                                }
-                            } else {
-                                resolve(file);
-                            }
-                        },
-                        'image/jpeg',
-                        quality
+                        blob => blob ? resolve(new File([blob], file.name, { type: 'image/jpeg' })) : resolve(file),
+                        'image/jpeg', quality
                     );
                 };
                 img.onerror = reject;
@@ -492,197 +451,258 @@
             });
         }
 
-        // 渲染图片预览
         function renderImagePreviews() {
-            const container = document.getElementById('imagePreview');
-
+            const container = document.getElementById('imagePreviewGrid');
             if (uploadedImages.length === 0) {
                 container.innerHTML = '';
                 return;
             }
-
             container.innerHTML = uploadedImages.map((img, index) => `
-                <div class="image-preview relative aspect-square rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
-                    <img src="${img.preview}" alt="Preview ${index + 1}" class="w-full h-full object-cover">
-                    <button onclick="removeImage(${index})" class="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="image-preview-card">
+                    <img src="${img.preview}" alt="Preview">
+                    <button class="delete-btn" onclick="removeImage(${index})">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                         </svg>
                     </button>
-                    <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/50 to-transparent p-2">
-                        <span class="text-xs text-white">${img.file.name.substring(0, 10)}...</span>
-                    </div>
                 </div>
             `).join('');
         }
 
-        // 移除图片
         function removeImage(index) {
             uploadedImages.splice(index, 1);
             renderImagePreviews();
         }
 
-        // 设置表单提交
-        function setupFormSubmit() {
-            const form = document.getElementById('productForm');
-            const submitBtn = document.getElementById('submitBtn');
+        // ==================== 文件处理 ====================
+        function showFileInfo(file) {
+            const fileInfo = document.getElementById('fileInfo');
+            const fileName = document.getElementById('fileName');
+            fileName.textContent = file.name;
+            fileInfo.classList.remove('hidden');
+        }
 
-            form.addEventListener('submit', async (e) => {
-                e.preventDefault();
+        function removeFile() {
+            document.getElementById('requirementsFile').value = '';
+            document.getElementById('fileInfo').classList.add('hidden');
+        }
 
-                // 收集表单数据
-                const formData = new FormData(form);
+        // ==================== 阶段一：产品分析 ====================
+        async function analyzeProduct() {
+            const productName = document.getElementById('productName').value.trim() || '未命名产品';
+            const btn = document.getElementById('analyzeBtn');
 
-                // 添加图片
-                uploadedImages.forEach((img, index) => {
-                    formData.append('images', img.file);
+            if (uploadedImages.length === 0) {
+                showToast('请先上传产品图片');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<div class="spinner"></div> 分析中...';
+            setConsoleStatus('正在分析产品特征...');
+
+            const formData = new FormData();
+            formData.append('product_name', productName);
+            uploadedImages.forEach(img => formData.append('images', img.file));
+
+            try {
+                const response = await fetch('/api/analyze_product', {
+                    method: 'POST',
+                    body: formData
                 });
 
-                // 添加产品元数据
-                const productMetadata = {
-                    project_name: formData.get('project_name'),
-                    product_name: formData.get('product_name'),
-                    material_color: formData.get('material_color'),
-                    dimensions: formData.get('dimensions'),
-                    function: formData.get('function'),
-                    selling_points: formData.get('selling_points'),
-                    red_lines: formData.get('red_lines'),
-                    requirements: formData.get('requirements')
-                };
-                formData.set('productMetadata', JSON.stringify(productMetadata));
+                const data = await response.json();
 
-                // 显示加载状态
-                showGeneratingState();
-                submitBtn.disabled = true;
+                if (data.success) {
+                    document.getElementById('anchorPrompt').value = data.anchor_prompt;
+                    currentProjectId = data.project_id;
+                    showToast('产品特征提取成功');
+                    setConsoleStatus('产品锚定完成，可进入阶段二');
+                    loadProjects();
+                } else {
+                    showToast(data.error || '分析失败');
+                    setConsoleStatus('分析失败');
+                }
+            } catch (error) {
+                console.error('分析失败:', error);
+                showToast('网络错误，请重试');
+                setConsoleStatus('分析失败');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                    </svg>
+                    提取产品特征
+                `;
+            }
+        }
 
-                try {
-                    const response = await fetch('/api/generate', {
-                        method: 'POST',
-                        body: formData
-                    });
+        // ==================== 阶段二：分镜生成 ====================
+        async function generateScript() {
+            const anchorPrompt = document.getElementById('anchorPrompt').value.trim();
+            const requirementsFile = document.getElementById('requirementsFile').files[0];
+            const btn = document.getElementById('generateBtn');
 
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
+            if (!anchorPrompt) {
+                showToast('请先完成阶段一，提取产品特征');
+                return;
+            }
 
-                    // 处理流式响应
-                    const reader = response.body.getReader();
-                    const decoder = new TextDecoder();
-                    currentResult = '';
+            btn.disabled = true;
+            btn.innerHTML = '<div class="spinner"></div> 生成中...';
+            setConsoleStatus('正在生成专业分镜脚本...');
 
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
+            // 清空控制台，开始新输出
+            accumulatedContent = '';
+            document.getElementById('console').innerHTML = '';
+            document.getElementById('charCount').textContent = '0';
 
-                        const chunk = decoder.decode(value);
-                        const lines = chunk.split('\n');
+            const formData = new FormData();
+            formData.append('anchor_prompt', anchorPrompt);
+            formData.append('project_id', currentProjectId || '');
+            if (requirementsFile) {
+                formData.append('requirements', requirementsFile);
+            }
 
-                        for (const line of lines) {
-                            if (line.startsWith('data: ')) {
-                                try {
-                                    const data = JSON.parse(line.slice(6));
-                                    handleStreamEvent(data);
-                                } catch (parseError) {
-                                    console.error('解析事件失败:', parseError);
-                                }
+            try {
+                const response = await fetch('/api/generate_script', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                // 使用 Reader 处理流式响应
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value, { stream: true });
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                handleStreamEvent(data);
+                            } catch (e) {
+                                // 忽略解析错误
                             }
                         }
                     }
-                } catch (error) {
-                    console.error('生成失败:', error);
-                    showToast('生成失败: ' + error.message, 'error');
-                    showStep1();
-                } finally {
-                    submitBtn.disabled = false;
                 }
-            });
+            } catch (error) {
+                console.error('生成失败:', error);
+                showToast('生成失败: ' + error.message);
+                setConsoleStatus('生成失败');
+                btn.disabled = false;
+                btn.innerHTML = `
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                    生成专业脚本
+                `;
+            }
         }
 
-        // 处理流事件
+        // ==================== 流式事件处理 ====================
         function handleStreamEvent(data) {
+            const console = document.getElementById('console');
+            const btn = document.getElementById('generateBtn');
+            const charCount = document.getElementById('charCount');
+
             switch (data.type) {
                 case 'start':
-                    document.getElementById('generatingMessage').textContent = data.message;
+                    console.innerHTML = '';
+                    setConsoleStatus(data.message);
                     break;
 
                 case 'chunk':
-                    currentResult += data.content;
-                    document.getElementById('storyboardResult').innerHTML = marked.parse(currentResult);
+                    accumulatedContent += data.content;
+                    charCount.textContent = accumulatedContent.length;
+                    // 渲染 Markdown
+                    console.innerHTML = marked.parse(accumulatedContent);
                     // 滚动到底部
-                    document.getElementById('storyboardResult').scrollIntoView({ behavior: 'smooth', block: 'end' });
+                    console.scrollTop = console.scrollHeight;
                     break;
 
                 case 'done':
-                    showResultState();
-                    showToast('分镜脚本生成完成！', 'success');
+                    setConsoleStatus('生成完成');
+                    showToast('分镜脚本生成完成');
                     loadProjects();
+                    btn.disabled = false;
+                    btn.innerHTML = `
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                        生成专业脚本
+                    `;
                     break;
 
                 case 'error':
-                    showToast('错误: ' + data.message, 'error');
-                    showStep1();
+                    setConsoleStatus('生成失败');
+                    showToast('错误: ' + data.message);
+                    btn.disabled = false;
+                    btn.innerHTML = `
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                        生成专业脚本
+                    `;
                     break;
 
                 case 'saved':
-                    showToast('项目已保存到历史记录', 'success');
-                    break;
-
-                case 'save_warning':
-                    showToast(data.message, 'warning');
+                    showToast('已保存到历史记录');
                     break;
             }
         }
 
-        // 显示生成状态
-        function showGeneratingState() {
-            document.getElementById('step1').classList.add('hidden');
-            document.getElementById('step2').classList.remove('hidden');
-            document.getElementById('generatingState').classList.remove('hidden');
-            document.getElementById('resultState').classList.add('hidden');
-
-            // 更新步骤指示器
-            document.getElementById('step1Indicator').classList.add('opacity-50');
-            document.getElementById('step2Indicator').classList.remove('opacity-50');
-            document.getElementById('step2Indicator').querySelector('div').classList.remove('bg-slate-200', 'text-slate-500');
-            document.getElementById('step2Indicator').querySelector('div').classList.add('bg-indigo-600', 'text-white');
+        // ==================== 控制台操作 ====================
+        function setConsoleStatus(text) {
+            document.getElementById('statusText').textContent = text;
         }
 
-        // 显示结果状态
-        function showResultState() {
-            document.getElementById('generatingState').classList.add('hidden');
-            document.getElementById('resultState').classList.remove('hidden');
+        function clearConsole() {
+            accumulatedContent = '';
+            document.getElementById('console').innerHTML = `
+                <div class="text-center text-slate-500 py-12">
+                    <svg class="w-16 h-16 mx-auto text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                    </svg>
+                    <p class="text-lg font-medium text-slate-400">等待指令</p>
+                    <p class="text-sm mt-1">请在左侧完成产品锚定后生成分镜脚本</p>
+                </div>
+            `;
+            document.getElementById('charCount').textContent = '0';
+            setConsoleStatus('就绪');
         }
 
-        // 显示 Step 1
-        function showStep1() {
-            document.getElementById('step1').classList.remove('hidden');
-            document.getElementById('step2').classList.add('hidden');
-            document.getElementById('generatingState').classList.add('hidden');
-            document.getElementById('resultState').classList.add('hidden');
-
-            // 重置步骤指示器
-            document.getElementById('step1Indicator').classList.remove('opacity-50');
-            document.getElementById('step2Indicator').classList.add('opacity-50');
-            document.getElementById('step2Indicator').querySelector('div').classList.add('bg-slate-200', 'text-slate-500');
-            document.getElementById('step2Indicator').querySelector('div').classList.remove('bg-indigo-600', 'text-white');
+        function copyConsole() {
+            if (accumulatedContent) {
+                navigator.clipboard.writeText(accumulatedContent).then(() => showToast('已复制到剪贴板')).catch(() => showToast('复制失败'));
+            }
         }
 
-        // 新建项目
-        function createNewProject() {
-            resetForm();
+        function downloadConsole() {
+            if (accumulatedContent) {
+                const blob = new Blob([accumulatedContent], { type: 'text/markdown' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `分镜脚本_${new Date().toISOString().slice(0, 10)}.md`;
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('开始下载');
+            }
         }
 
-        // 重置表单
-        function resetForm() {
-            document.getElementById('productForm').reset();
-            uploadedImages = [];
-            currentResult = '';
-            renderImagePreviews();
-            removeFile();
-            showStep1();
-        }
-
-        // 加载项目
+        // ==================== 项目管理 ====================
         async function loadProject(projectId) {
             try {
                 const response = await fetch(`/api/projects/${projectId}`);
@@ -691,123 +711,57 @@
                 if (data.success && data.project) {
                     const project = data.project;
 
-                    // 填充表单
-                    document.querySelector('[name="project_name"]').value = project.project_name || '';
-                    document.querySelector('[name="product_name"]').value = project.product_name || '';
-                    document.querySelector('[name="material_color"]').value = project.product_material || '';
-                    document.querySelector('[name="dimensions"]').value = project.product_dimensions || '';
-                    document.querySelector('[name="function"]').value = project.product_function || '';
-                    document.querySelector('[name="selling_points"]').value = project.selling_points || '';
-                    document.querySelector('[name="red_lines"]').value = project.red_lines || '';
+                    // 回填表单
+                    document.getElementById('productName').value = project.product_name || '';
+                    document.getElementById('anchorPrompt').value = project.anchor_prompt || '';
+                    currentProjectId = project.id;
 
-                    // 显示历史内容
+                    // 渲染历史脚本
                     if (project.storyboard_content) {
-                        currentResult = project.storyboard_content;
-                        showStep2WithResult();
+                        accumulatedContent = project.storyboard_content;
+                        document.getElementById('console').innerHTML = marked.parse(accumulatedContent);
+                        document.getElementById('charCount').textContent = accumulatedContent.length;
+                        setConsoleStatus('已加载历史项目');
+                    } else {
+                        clearConsole();
                     }
 
-                    showToast('已加载项目: ' + project.project_name, 'success');
+                    showToast('已加载: ' + project.project_name);
                 }
             } catch (error) {
-                console.error('加载项目失败:', error);
-                showToast('加载项目失败', 'error');
+                console.error('加载失败:', error);
+                showToast('加载项目失败');
             }
         }
 
-        // 显示带结果的 Step 2
-        function showStep2WithResult() {
-            document.getElementById('step1').classList.add('hidden');
-            document.getElementById('step2').classList.remove('hidden');
-            document.getElementById('generatingState').classList.add('hidden');
-            document.getElementById('resultState').classList.remove('hidden');
-            document.getElementById('storyboardResult').innerHTML = marked.parse(currentResult);
-
-            // 更新步骤指示器
-            document.getElementById('step1Indicator').classList.add('opacity-50');
-            document.getElementById('step2Indicator').classList.remove('opacity-50');
-            document.getElementById('step2Indicator').querySelector('div').classList.remove('bg-slate-200', 'text-slate-500');
-            document.getElementById('step2Indicator').querySelector('div').classList.add('bg-indigo-600', 'text-white');
-        }
-
-        // 删除项目
         async function deleteProject(projectId) {
-            if (!confirm('确定要删除这个项目吗？')) return;
+            if (!confirm('确定删除此项目？')) return;
 
             try {
-                const response = await fetch(`/api/projects/${projectId}`, {
-                    method: 'DELETE'
-                });
+                const response = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
                 const data = await response.json();
 
                 if (data.success) {
-                    showToast('项目已删除', 'success');
+                    showToast('已删除');
                     loadProjects();
-                } else {
-                    showToast(data.error || '删除失败', 'error');
+                    if (currentProjectId === projectId) {
+                        clearConsole();
+                        currentProjectId = null;
+                    }
                 }
             } catch (error) {
-                console.error('删除项目失败:', error);
-                showToast('删除项目失败', 'error');
+                showToast('删除失败');
             }
         }
 
-        // 复制结果
-        function copyResult() {
-            navigator.clipboard.writeText(currentResult).then(() => {
-                showToast('已复制到剪贴板', 'success');
-            }).catch(() => {
-                showToast('复制失败', 'error');
-            });
-        }
-
-        // 下载结果
-        function downloadResult() {
-            const blob = new Blob([currentResult], { type: 'text/markdown' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `分镜脚本_${new Date().toISOString().slice(0, 10)}.md`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            showToast('开始下载', 'success');
-        }
-
-        // Toast 通知
-        function showToast(message, type = 'success') {
+        // ==================== 工具函数 ====================
+        function showToast(message) {
             const toast = document.getElementById('toast');
-            const toastMessage = document.getElementById('toastMessage');
-            const toastIcon = document.getElementById('toastIcon');
-
-            toastMessage.textContent = message;
-
-            // 设置图标
-            const icons = {
-                success: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>',
-                error: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>',
-                warning: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>'
-            };
-
-            const colors = {
-                success: 'text-emerald-400',
-                error: 'text-red-400',
-                warning: 'text-amber-400'
-            };
-
-            toastIcon.innerHTML = icons[type] || icons.success;
-            toastIcon.className = `w-5 h-5 ${colors[type] || colors.success}`;
-
-            toast.classList.remove('translate-y-full', 'opacity-0');
-            toast.classList.add('translate-y-0', 'opacity-100');
-
-            setTimeout(() => {
-                toast.classList.remove('translate-y-0', 'opacity-100');
-                toast.classList.add('translate-y-full', 'opacity-0');
-            }, 3000);
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
         }
 
-        // 工具函数
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
@@ -818,12 +772,9 @@
             const date = new Date(dateStr);
             const now = new Date();
             const diff = now - date;
-
             if (diff < 60000) return '刚刚';
             if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`;
             if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`;
-            if (diff < 604800000) return `${Math.floor(diff / 86400000)} 天前`;
-
             return date.toLocaleDateString('zh-CN');
         }
     </script>

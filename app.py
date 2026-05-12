@@ -1,18 +1,16 @@
 """
 AI 商业视频制片工作台 - Flask 后端
-支持多模态图片输入 + 流式 Markdown 输出
+双阶段工作流：产品锚定 + 分镜生成
 """
 import os
 import json
 import base64
-import uuid
 import traceback
 from datetime import datetime
 from io import BytesIO
 
 from flask import Flask, render_template, request, jsonify, Response
 from openai import OpenAI
-from openai import APIError, RateLimitError, APITimeoutError
 from dotenv import load_dotenv
 
 try:
@@ -21,17 +19,19 @@ try:
 except ImportError:
     PIL_AVAILABLE = False
 
-from database import (
-    init_database, create_project, update_project,
-    get_all_projects, get_project, delete_project,
-    save_project_images, get_project_images
-)
+try:
+    import pandas as pd
+    PANDAS_AVAILABLE = True
+except ImportError:
+    PANDAS_AVAILABLE = False
+
+from database import init_database, create_project, update_project, get_all_projects, get_project, delete_project
 
 # 加载环境变量
 load_dotenv()
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024
 
 # API 配置
 API_KEY = os.getenv("NEW_API_KEY", os.getenv("OPENAI_API_KEY", ""))
@@ -41,7 +41,8 @@ MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4o")
 # 初始化 OpenAI 客户端
 client = OpenAI(api_key=API_KEY, base_url=API_BASE)
 
-# 图片压缩函数
+
+# ==================== 图片压缩 ====================
 def compress_image(file_data, max_size=(1024, 1024), quality=85):
     """压缩图片，减少 Base64 大小"""
     if not PIL_AVAILABLE:
@@ -49,14 +50,9 @@ def compress_image(file_data, max_size=(1024, 1024), quality=85):
 
     try:
         img = Image.open(BytesIO(file_data))
-        # 转换为 RGB（如果是 RGBA）
         if img.mode == 'RGBA':
             img = img.convert('RGB')
-
-        # 缩放图片
         img.thumbnail(max_size, Image.Resampling.LANCZOS)
-
-        # 保存为 JPEG
         output = BytesIO()
         img.save(output, format='JPEG', quality=quality, optimize=True)
         return output.getvalue()
@@ -64,48 +60,69 @@ def compress_image(file_data, max_size=(1024, 1024), quality=85):
         print(f"图片压缩失败: {e}")
         return file_data
 
-# 测试连接
-def test_api_connection():
-    """测试 API 连接"""
-    try:
-        response = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[{"role": "user", "content": "hi"}],
-            max_tokens=5
-        )
-        return True, "连接成功"
-    except Exception as e:
-        return False, str(e)
 
-# ==================== 系统提示词 ====================
-SYSTEM_PROMPT = """你是好莱坞级灯光摄影指导与 Midjourney/Sora 资深提示词工程师。
+# ==================== 阶段一：产品分析 Prompt ====================
+PRODUCT_ANALYSIS_SYSTEM = """You are a senior Midjourney prompt engineer specializing in product photography.
 
-## 你的任务
-根据用户提供的需求表和产品信息，为商业视频生成专业的分镜脚本和 Midjourney 提示词。
+Your task: Analyze the uploaded product images and generate a precise, pure English product appearance description.
 
-## 核心原则
-1. **你已看到用户上传的产品参考图** - 在撰写提示词时，必须精准描述图中的材质、颜色和结构
-2. **分镜脚本必须专业** - 包含镜头编号、时长、运镜、场景描述、画面内容、AI提示词
-3. **提示词格式要求** - 首尾帧提示词必须以 `[Image Reference]` 开头
-4. **双语呈现** - 英文提示词下方必须附带低调的中文翻译
+CRITICAL RULES:
+1. Output ONLY a single line of comma-separated English tags
+2. Focus ONLY on: material, texture, color, shape, surface finish, key structural details
+3. Do NOT include any lighting, background, or environmental elements
+4. Use professional photography terms
+5. Keep it under 200 characters total
 
-## 输出格式
-直接输出 Markdown 格式的分镜表格，使用以下列：
-| 镜头 | 时长 | 运镜 | 场景描述 | 画面内容 | AI提示词(英文+中文) |
+Example output format:
+"metallic aluminum alloy, brushed surface texture, matte silver finish, cylindrical body, 15cm height, precision-machined edges, minimalist industrial design, premium build quality"
+"""
 
-## AI提示词列的 HTML 格式要求
-```html
-[Image Reference] cinematic lighting, 8k resolution, product photography...<br>
-<span style="font-size: 12px; color: #94a3b8;">(中文翻译：电影院级打光，8K分辨率，产品摄影...)</span>
+PRODUCT_ANALYSIS_USER = """Please analyze this product image and describe its appearance in detail for Midjourney image generation.
+
+Focus on:
+- Exact colors and color gradients
+- Material texture (matte, glossy, brushed, metallic, etc.)
+- Shape and form
+- Surface finish details
+- Key structural elements
+- Size proportions if visible
+
+Provide ONLY the English description tags, comma-separated, no explanations."""
+
+
+# ==================== 阶段二：分镜生成 Prompt ====================
+SCRIPT_GENERATION_SYSTEM = """You are a Hollywood cinematographer and professional storyboard artist.
+
+Your task: Generate professional commercial video storyboards based on the user's requirements.
+
+MANDATORY OUTPUT FORMAT - You MUST output valid Markdown table:
+
+| 镜头编号 | 景别/焦段 | 画面与动作描述 | 首帧提示词(Start) | 尾帧提示词(End) |
+|---------|----------|--------------|------------------|----------------|
+
+CRITICAL CONSISTENCY RULE:
+- Every "首帧提示词" and "尾帧提示词" MUST contain the user's "锚定词" (anchor prompt) FIRST
+- The anchor prompt must appear EXACTLY as provided, then add scene-specific elements
+- Do NOT modify or paraphrase the anchor prompt
+
+PROMPT FORMAT (English only, comma-separated tags):
+- Start prompts: begin with anchor + specific scene elements
+- End prompts: begin with anchor + movement/transformation elements
+
+MANDATORY BILINGUAL FORMAT for each prompt cell:
+```
+{English prompt}
+<br><span style="font-size:12px;color:#9ca3af;">(中文：{Chinese translation})</span>
 ```
 
-## 关键提示
-- 镜头时长建议 3-8 秒
-- 运镜方式要多样化（推、拉、摇、移、跟等）
-- 每个镜头必须有独特的视觉叙事
-- 提示词要具体、生动、可执行
-- 中文翻译要简洁、准确、与英文对应
-"""
+Example:
+```
+sleek metallic body, brushed aluminum surface, soft studio lighting, 8k, product photography, centered composition
+<br><span style="font-size:12px;color:#9ca3af;">(中文：时尚金属机身，刷纹铝面，柔和影棚灯光，8K，产品摄影，居中构图)</span>
+```
+
+Keep descriptions concise, professional, and suitable for actual video production."""
+
 
 # ==================== 路由 ====================
 @app.route('/')
@@ -116,7 +133,7 @@ def index():
 
 @app.route('/api/projects', methods=['GET'])
 def list_projects():
-    """获取所有项目列表"""
+    """获取所有项目"""
     try:
         projects = get_all_projects()
         return jsonify({'success': True, 'projects': projects})
@@ -131,10 +148,6 @@ def get_project_detail(project_id):
         project = get_project(project_id)
         if not project:
             return jsonify({'success': False, 'error': '项目不存在'}), 404
-
-        images = get_project_images(project_id)
-        project['images'] = images
-
         return jsonify({'success': True, 'project': project})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -147,179 +160,224 @@ def delete_project_route(project_id):
         success = delete_project(project_id)
         if success:
             return jsonify({'success': True})
-        else:
-            return jsonify({'success': False, 'error': '项目不存在'}), 404
+        return jsonify({'success': False, 'error': '项目不存在'}), 404
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@app.route('/api/generate', methods=['POST'])
-def generate_storyboard():
+# ==================== 阶段一：产品特征提取 ====================
+@app.route('/api/analyze_product', methods=['POST'])
+def analyze_product():
     """
-    接收产品数据和图片，调用多模态 AI 生成流式分镜脚本
+    接收产品图片，返回锚定词
     """
-    # 先获取所有数据
-    product_metadata = request.form.get('productMetadata', '{}')
-    product_metadata = json.loads(product_metadata)
+    try:
+        # 获取产品名称
+        product_name = request.form.get('product_name', 'Unknown Product')
 
-    # 处理上传的图片
-    images = []
-    total_size = 0
-    if 'images' in request.files:
-        files = request.files.getlist('images')
-        for f in files:
-            if f and f.filename:
-                # 读取原始数据
-                original_data = f.read()
-                f.seek(0)  # 重置文件指针
+        # 处理图片
+        images = []
+        if 'images' in request.files:
+            files = request.files.getlist('images')
+            for f in files:
+                if f and f.filename:
+                    original_data = f.read()
+                    compressed = compress_image(original_data)
+                    img_data = base64.b64encode(compressed).decode('utf-8')
+                    images.append({
+                        'data': f"data:image/jpeg;base64,{img_data}",
+                        'name': f.filename
+                    })
 
-                # 压缩图片
-                compressed_data = compress_image(original_data)
-                img_data = base64.b64encode(compressed_data).decode('utf-8')
-                total_size += len(img_data)
+        if not images:
+            return jsonify({'success': False, 'error': '请上传至少一张产品图片'}), 400
 
-                # 检查总大小，超过 20MB 就跳过剩余图片
-                if total_size > 20 * 1024 * 1024:
-                    print(f"警告: 图片总大小超过 20MB，跳过剩余图片")
-                    break
-
-                mime_type = 'image/jpeg'  # 压缩后统一转为 JPEG
-                images.append({
-                    'data': f"data:{mime_type};base64,{img_data}",
-                    'name': f.filename
-                })
-
-    def generate():
-        try:
-            # 构建消息内容数组（多模态）
-            message_content = []
-
-            # 添加图片（如果有）
-            for img in images:
-                message_content.append({
-                    "type": "image_url",
-                    "image_url": {
-                        "url": img['data'],
-                        "detail": "high"
-                    }
-                })
-
-            # 添加用户需求文本
-            user_prompt = build_user_prompt(product_metadata)
+        # 构建消息内容
+        message_content = []
+        for img in images:
             message_content.append({
-                "type": "text",
-                "text": user_prompt
+                "type": "image_url",
+                "image_url": {"url": img['data'], "detail": "high"}
             })
+        message_content.append({
+            "type": "text",
+            "text": PRODUCT_ANALYSIS_USER
+        })
 
-            # 发送开始信号
-            yield f"data: {json.dumps({'type': 'start', 'message': '🎬 开始生成商业分镜脚本...'})}\n\n"
+        # 调用 AI
+        try:
+            response = client.chat.completions.create(
+                model=MODEL_NAME,
+                messages=[
+                    {"role": "system", "content": PRODUCT_ANALYSIS_SYSTEM},
+                    {"role": "user", "content": message_content}
+                ],
+                max_tokens=500,
+                temperature=0.7
+            )
+        except Exception as api_err:
+            print(f"API 调用失败: {traceback.format_exc()}")
+            return jsonify({'success': False, 'error': f'API 调用失败: {str(api_err)}'}), 500
 
-            # 调用 AI 流式接口
+        anchor_prompt = response.choices[0].message.content.strip()
+
+        # 创建项目记录
+        project_id = create_project(
+            project_name=f"{product_name} - {datetime.now().strftime('%Y%m%d %H:%M')}",
+            product_name=product_name,
+            anchor_prompt=anchor_prompt
+        )
+
+        return jsonify({
+            'success': True,
+            'anchor_prompt': anchor_prompt,
+            'project_id': project_id
+        })
+
+    except Exception as e:
+        print(f"产品分析错误: {traceback.format_exc()}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ==================== 阶段二：分镜脚本生成（流式） ====================
+@app.route('/api/generate_script', methods=['POST'])
+def generate_script():
+    """
+    接收需求表 + 锚定词，生成流式分镜脚本
+    """
+    try:
+        # 获取数据
+        anchor_prompt = request.form.get('anchor_prompt', '')
+        project_id = request.form.get('project_id')
+        requirements_content = ''
+
+        # 解析需求表
+        if 'requirements' in request.files:
+            file = request.files['requirements']
+            if file and file.filename:
+                ext = os.path.splitext(file.filename)[1].lower()
+                content = file.read()
+
+                if ext in ['.xlsx', '.xls']:
+                    if PANDAS_AVAILABLE:
+                        try:
+                            df = pd.read_excel(BytesIO(content))
+                            # 转换为 CSV 格式的纯文本
+                            requirements_content = df.to_csv(index=False, encoding='utf-8')
+                        except Exception as excel_err:
+                            print(f"Excel 解析失败: {excel_err}")
+                            requirements_content = ''
+                elif ext == '.csv':
+                    if PANDAS_AVAILABLE:
+                        try:
+                            df = pd.read_csv(BytesIO(content))
+                            requirements_content = df.to_csv(index=False, encoding='utf-8')
+                        except Exception as csv_err:
+                            print(f"CSV 解析失败: {csv_err}")
+                            requirements_content = content.decode('utf-8', errors='replace')
+                    else:
+                        requirements_content = content.decode('utf-8', errors='replace')
+
+        def generate():
             try:
+                # 构建提示词
+                user_prompt = build_script_prompt(anchor_prompt, requirements_content)
+
+                # 发送开始信号
+                yield f"data: {json.dumps({'type': 'start', 'message': '开始生成专业分镜脚本...'})}\n\n"
+
+                # 流式调用
                 stream = client.chat.completions.create(
                     model=MODEL_NAME,
                     messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": message_content}
+                        {"role": "system", "content": SCRIPT_GENERATION_SYSTEM},
+                        {"role": "user", "content": user_prompt}
                     ],
                     stream=True,
                     temperature=0.7,
                     max_tokens=8192
                 )
-            except Exception as api_error:
-                error_msg = str(api_error)
-                print(f"API 调用错误: {error_msg}")
-                yield f"data: {json.dumps({'type': 'error', 'message': f'API 调用失败: {error_msg}'})}\n\n"
-                return
 
-            for chunk in stream:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    content = chunk.choices[0].delta.content
-                    # 发送增量内容
-                    yield f"data: {json.dumps({'type': 'chunk', 'content': content})}\n\n"
+                accumulated = ''
+                for chunk in stream:
+                    if chunk.choices and chunk.choices[0].delta.content:
+                        content = chunk.choices[0].delta.content
+                        accumulated += content
+                        # 发送增量内容
+                        yield f"data: {json.dumps({'type': 'chunk', 'content': content, 'accumulated': accumulated})}\n\n"
 
-            # 发送完成信号
-            yield f"data: {json.dumps({'type': 'done', 'message': '生成完成！'})}\n\n"
+                # 完成
+                yield f"data: {json.dumps({'type': 'done', 'message': '生成完成'})}\n\n"
 
-            # 保存到数据库
-            try:
-                project_name = product_metadata.get('project_name', f'项目_{datetime.now().strftime("%Y%m%d_%H%M")}')
-                product_name = product_metadata.get('product_name', '')
+                # 保存到数据库
+                try:
+                    if project_id:
+                        update_project(int(project_id), storyboard_content=accumulated)
+                    yield f"data: {json.dumps({'type': 'saved', 'message': '已保存到历史记录'})}\n\n"
+                except Exception as save_err:
+                    yield f"data: {json.dumps({'type': 'save_warning', 'message': f'保存失败: {save_err}'})}\n\n"
 
-                project_id = create_project(
-                    project_name=project_name,
-                    product_name=product_name,
-                    product_material=product_metadata.get('material_color', ''),
-                    product_dimensions=product_metadata.get('dimensions', ''),
-                    product_function=product_metadata.get('function', ''),
-                    selling_points=product_metadata.get('selling_points', ''),
-                    red_lines=product_metadata.get('red_lines', '')
-                )
+            except Exception as e:
+                error_detail = traceback.format_exc()
+                print(f"生成错误: {error_detail}")
+                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
 
-                # 保存图片
-                if images:
-                    save_project_images(project_id, images)
+        return Response(
+            generate(),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'X-Accel-Buffering': 'no'
+            }
+        )
 
-                yield f"data: {json.dumps({'type': 'saved', 'project_id': project_id})}\n\n"
-
-            except Exception as db_err:
-                yield f"data: {json.dumps({'type': 'save_warning', 'message': f'保存失败: {str(db_err)}'})}\n\n"
-
-        except Exception as e:
-            error_detail = traceback.format_exc()
-            print(f"生成错误: {error_detail}")
-            yield f"data: {json.dumps({'type': 'error', 'message': f'生成失败: {str(e)}'})}\n\n"
-
-    return Response(
-        generate(),
-        mimetype='text/event-stream',
-        headers={
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-            'X-Accel-Buffering': 'no'
-        }
-    )
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
-def build_user_prompt(product_metadata: dict) -> str:
-    """构建发送给 AI 的用户提示"""
-    prompt_parts = []
+def build_script_prompt(anchor_prompt: str, requirements_content: str) -> str:
+    """构建分镜生成提示词"""
+    prompt = f"""## 产品锚定词 (ANCHOR - 必须原封不动用于所有首尾帧)
 
-    prompt_parts.append("## 产品信息")
+{anchor_prompt}
 
-    if product_metadata.get('product_name'):
-        prompt_parts.append(f"**产品名称**: {product_metadata.get('product_name')}")
+"""
 
-    if product_metadata.get('material_color'):
-        prompt_parts.append(f"**材质与颜色**: {product_metadata.get('material_color')}")
+    if requirements_content:
+        prompt += f"""## 镜头需求表
 
-    if product_metadata.get('dimensions'):
-        prompt_parts.append(f"**精确尺寸** (禁止变形): {product_metadata.get('dimensions')}")
+{requirements_content}
 
-    if product_metadata.get('function'):
-        prompt_parts.append(f"**产品功能**: {product_metadata.get('function')}")
+"""
 
-    if product_metadata.get('selling_points'):
-        prompt_parts.append(f"**卖点**: {product_metadata.get('selling_points')}")
+    prompt += """请根据以上信息，生成专业商业视频分镜脚本。
 
-    if product_metadata.get('red_lines'):
-        prompt_parts.append(f"**视觉红线** (禁止修改): {product_metadata.get('red_lines')}")
+严格遵循以下格式输出 Markdown 表格：
 
-    if product_metadata.get('requirements'):
-        prompt_parts.append("\n## 镜头需求表:")
-        prompt_parts.append(product_metadata.get('requirements'))
+| 镜头编号 | 景别/焦段 | 画面与动作描述 | 首帧提示词(Start) | 尾帧提示词(End) |
+|---------|----------|--------------|------------------|----------------|
 
-    prompt_parts.append("\n\n请根据以上信息，生成专业的商业视频分镜脚本，包含 Midjourney/Sora 提示词。")
+【核心一致性法则】：
+1. 每个"首帧提示词"和"尾帧提示词"必须以锚定词开头，后面才是场景特定描述
+2. 锚定词必须完全一致，不能有任何修改
+3. 提示词必须是纯英文逗号分隔的标签
 
-    return "\n".join(prompt_parts)
+【提示词格式示例】：
+首帧: `sleek metallic body, brushed aluminum surface, cinematic soft lighting, 8k, product photography`<br>
+      `<span style="font-size:12px;color:#9ca3af;">(中文：时尚金属机身，刷纹铝面，电影级柔和灯光，8K，产品摄影)</span>`
+
+请立即开始生成 Markdown 表格："""
+
+    return prompt
 
 
 # ==================== 启动 ====================
 if __name__ == '__main__':
     init_database()
-    print("=" * 50)
-    print("🎬 AI 商业视频制片工作台启动中...")
-    print(f"📡 使用模型: {MODEL_NAME}")
-    print(f"🌐 访问地址: http://localhost:5000")
-    print("=" * 50)
+    print("=" * 60)
+    print("  AI 商业视频制片工作台")
+    print("  模型: " + MODEL_NAME)
+    print("  访问: http://localhost:5000")
+    print("=" * 60)
     app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
