@@ -3,7 +3,7 @@
 """
 import sqlite3
 import os
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
 
 DATABASE_PATH = os.path.join(os.path.dirname(__file__), 'storyboard_history.db')
@@ -39,6 +39,12 @@ def init_database():
     conn.close()
 
 
+def _get_beijing_time():
+    """获取北京时间 (UTC+8)"""
+    tz_utc_8 = timezone(timedelta(hours=8))
+    return datetime.now(tz_utc_8).strftime("%Y-%m-%d %H:%M:%S")
+
+
 def create_project(
     project_name: str,
     product_name: str = None,
@@ -49,11 +55,12 @@ def create_project(
     """创建新项目"""
     conn = get_connection()
     cursor = conn.cursor()
+    current_time = _get_beijing_time()
 
     cursor.execute('''
-        INSERT INTO projects (project_name, product_name, anchor_prompt, storyboard_content, aspect_ratio)
-        VALUES (?, ?, ?, ?, ?)
-    ''', (project_name, product_name, anchor_prompt, storyboard_content, aspect_ratio))
+        INSERT INTO projects (project_name, product_name, anchor_prompt, storyboard_content, aspect_ratio, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', (project_name, product_name, anchor_prompt, storyboard_content, aspect_ratio, current_time, current_time))
 
     project_id = cursor.lastrowid
     conn.commit()
@@ -93,7 +100,9 @@ def update_project(
         params.append(project_name)
 
     if updates:
-        updates.append("updated_at = CURRENT_TIMESTAMP")
+        current_time = _get_beijing_time()
+        updates.append("updated_at = ?")
+        params.append(current_time)
         params.append(project_id)
         cursor.execute(f'''
             UPDATE projects
@@ -153,12 +162,13 @@ def rename_project(project_id: int, new_name: str) -> bool:
     """重命名项目"""
     conn = get_connection()
     cursor = conn.cursor()
+    current_time = _get_beijing_time()
 
     cursor.execute('''
         UPDATE projects
-        SET project_name = ?, updated_at = CURRENT_TIMESTAMP
+        SET project_name = ?, updated_at = ?
         WHERE id = ?
-    ''', (new_name, project_id))
+    ''', (new_name, current_time, project_id))
     
     updated = cursor.rowcount > 0
     conn.commit()

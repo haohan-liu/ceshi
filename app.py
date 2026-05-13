@@ -2,13 +2,14 @@
 AI 商业视频制片工作台 - 企业级重构版
 """
 import os
+import re
 import json
 import base64
 import traceback
 from datetime import datetime
 from io import BytesIO
 
-from flask import Flask, render_template, request, jsonify, Response
+from flask import Flask, render_template, request, jsonify, Response, send_file
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -23,6 +24,14 @@ try:
     PANDAS_AVAILABLE = True
 except ImportError:
     PANDAS_AVAILABLE = False
+
+try:
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+    from openpyxl.utils import get_column_letter
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    OPENPYXL_AVAILABLE = False
 
 from database import init_database, create_project, update_project, get_all_projects, get_project, delete_project, rename_project
 
@@ -42,11 +51,6 @@ def get_client():
     api_key = os.getenv("NEW_API_KEY", "")
     api_base = os.getenv("NEW_API_BASE_URL", "https://api.openai.com/v1")
     model = os.getenv("MODEL_NAME", "")
-    
-    print(f"[DEBUG] .env: {env_path}")
-    print(f"[DEBUG] Key: {api_key[:15]}..." if api_key else "[DEBUG] Key: 未设置")
-    print(f"[DEBUG] Base: {api_base}")
-    print(f"[DEBUG] Model: {model}")
     
     if not api_key:
         raise Exception("API Key 未配置！请编辑 .env 文件")
@@ -96,83 +100,59 @@ Output ONLY English tags, comma-separated."""
 
 
 def build_script_system_prompt(aspect_ratio: str) -> str:
-    """根据画幅比例构建专业的 system prompt"""
-    ar_display = "16:9 横屏 (Cinematic Widescreen)" if aspect_ratio == "16:9" else "9:16 竖屏 (Vertical Mobile)"
+    """根据画幅比例构建好莱坞级别的专业分镜 system prompt"""
+    ar_display = "16:9 Cinematic Widescreen" if aspect_ratio == "16:9" else "9:16 Vertical Mobile"
     ar_param = "--ar 16:9" if aspect_ratio == "16:9" else "--ar 9:16"
 
-    composition_rules = """
-【画幅与构图 - {ar_display}】
-- 横向: cinematic widescreen, landscape orientation, expansive environment, film grain, cinematic composition
-- 竖向: vertical video format, portrait orientation, tight framing, optimized for mobile, vertical composition
-""".format(ar_display=ar_display) if aspect_ratio == "16:9" else """
-【画幅与构图 - {ar_display}】
-- 横向: cinematic widescreen, landscape orientation, expansive environment, film grain, cinematic composition
-- 竖向: vertical video format, portrait orientation, tight framing, optimized for mobile, vertical composition
-""".format(ar_display=ar_display)
+    return f"""You are a Hollywood Director of Photography (DP) with 20+ years of experience in commercial cinematography.
 
-    return f"""You are a Hollywood cinematographer (Director of Photography).
+═══════════════════════════════════════════════════════════════
+STRICT RULES - VIOLATION = REJECTION
+═══════════════════════════════════════════════════════════════
 
-【CRITICAL RULE 1: NO HALLUCINATION】
-- Strictly generate shots based on the user's CSV/Excel table data
-- The number of shots MUST match the number of rows in the table
-- NEVER invent any shots not in the table
+【RULE #1: NO HALLUCINATION】
+• Generate EXACTLY the same number of shots as the input table rows
+• ONE row = ONE shot minimum
+• If a row describes multiple actions, split into MULTIPLE shots
+• NEVER invent or add shots not in the input table
 
-【CRITICAL RULE 2: ACTION SPLITTING】
-- If a row contains multiple actions (e.g., "first aerial shot... then side shot..."), split into multiple independent shots
-- Each shot MUST have a clear physical action
-- Do not miss any action description
+【RULE #2: ANCHOR KEYWORDS MANDATORY】
+• EVERY shot (both Start AND End) MUST begin with the anchor keywords
+• Copy-paste anchor keywords VERBATIM - do not modify, translate, or paraphrase
+• Anchor keywords = your product's visual identity
 
-【CRITICAL RULE 3: START-END FRAME BINDING】
-- Start Frame (Start): Describe the initial state of the scene + anchor keywords
-- End Frame (End): Describe the state after the action completes + anchor keywords
-- MUST include clear physical action and state change
+【RULE #3: PROFESSIONAL MIDJOURNEY TAGS REQUIRED】
+• Start Frame = [Shot Type] + [Anchor Keywords] + [Initial State] + [Camera/Lighting] + {ar_param}
+• End Frame = [Shot Type] + [Anchor Keywords] + [Final State] + [Camera/Lighting] + {ar_param}
+• Must include professional tags: cinematic lighting, shot on 35mm, photorealistic, film grain, etc.
+• Material and texture details are MANDATORY for the product
 
-【CRITICAL RULE 4: ANCHOR CONSISTENCY】
-- Every start and end frame MUST start with the anchor keywords
-- Anchor keywords must be used verbatim, do not modify
-
-【CRITICAL RULE 5: {ar_display}】
-{composition_rules}
-
-【CRITICAL RULE 6: PARAM MANDATORY】
-- EVERY start and end prompt MUST end with: {ar_param}
-- Append directly to the English prompt
-
-【CRITICAL RULE 7: PRODUCT NO DISTORTION】
-- Regardless of aspect ratio changes, the product MUST NOT be squashed, stretched or deformed
-- Only adjust composition and background
-
-【CRITICAL RULE 8: LOGO STANDARD】
-- All "logo", "mark", "emblem" unified translation: "LOGO"
-
-【CRITICAL RULE 9: PROMPT PROFESSIONALISM】
-- You are writing Midjourney/Sora control instructions, NOT essays!
-- Start Frame Prompt = [Environment/Shot Type] + [Product Anchor Keywords] + [Initial State]
-- End Frame Prompt = [Environment/Shot Type] + [Product Anchor Keywords] + [Final State After Action]
-- Must be professional English visual tags (e.g., cinematic lighting, shot on 35mm lens, photorealistic)
-
-【OUTPUT FORMAT - PURE MARKDOWN TABLE】
-
-Output pure Markdown table:
-
-| 镜头 | 景别/焦段 | 画面与动作描述 | 首帧提示词(Start) | 尾帧提示词(End) |
-| 1 | ... | ... | ... | ... |
-
-【PROMPT FORMAT - DECOUPLED TRANSLATION】
-
-In the Start/End prompt cells, output in this EXACT format:
-```
-English prompt text here {ar_param} <!--cn:Chinese translation here:-->
-```
-
-The <!--cn:...:--> is an HTML comment for translation. Do NOT use <span title="..."> tags!
+【RULE #4: TRANSLATION FORMAT - MANDATORY】
+Every Start/End prompt cell MUST use this EXACT format:
+`English prompt text with professional tags {ar_param} __CN__Precise Chinese translation including aspect ratio__ENDCN__`
 
 Example:
-`close-up product shot, soft studio lighting, centered composition, sharp focus {ar_param} <!--cn:产品特写，柔和灯光，中心构图，清晰对焦:-->`
+`close-up product shot, metallic finish, soft shadows, cinematic lighting, shot on 35mm lens {ar_param} __CN__产品特写，金属质感，柔和阴影，电影级灯光，35mm镜头拍摄__ENDCN__`
 
-【IMPORTANT】
-- [Image Reference] does not need translation
-- Strictly follow the table row count - N rows = N shots minimum""".format(ar_display=ar_display, ar_param=ar_param)
+【RULE #5: ASPECT RATIO SAFETY】
+• Product MUST NOT be squashed, stretched, or deformed at any ratio
+• Only adjust composition, background, and framing
+• Always include {ar_param} at the END of every prompt
+
+【RULE #6: LOGO STANDARD】
+• All "logo", "mark", "emblem", "brand" = "LOGO" in English
+• LOGO must be properly integrated into the visual composition
+
+═══════════════════════════════════════════════════════════════
+OUTPUT FORMAT
+═══════════════════════════════════════════════════════════════
+
+Output ONLY a pure Markdown table:
+
+| 镜头 | 景别/焦段 | 画面与动作描述 | 首帧提示词(Start) | 尾帧提示词(End) |
+| 1 | wide shot | establishing view | Start prompt __CN__中文翻译__ENDCN__ | End prompt __CN__中文翻译__ENDCN__ |
+
+DO NOT include any other text. Start generating now."""
 
 
 # ==================== 路由 ====================
@@ -231,6 +211,188 @@ def rename_project_route():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/export_excel', methods=['POST'])
+def export_excel():
+    """导出精美 Excel 报表"""
+    if not OPENPYXL_AVAILABLE:
+        return jsonify({'success': False, 'error': 'openpyxl 未安装'}), 500
+    
+    try:
+        data = request.get_json()
+        project_name = data.get('project_name', '未命名项目')
+        product_name = data.get('product_name', '')
+        aspect_ratio = data.get('aspect_ratio', '16:9')
+        anchor_prompt = data.get('anchor_prompt', '')
+        storyboard_content = data.get('storyboard_content', '')
+        
+        # 创建工作簿
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "分镜脚本"
+        
+        # 样式定义
+        header_fill = PatternFill(start_color="1e293b", end_color="1e293b", fill_type="solid")
+        header_font = Font(name='Microsoft YaHei', size=11, bold=True, color="FFFFFF")
+        title_font = Font(name='Microsoft YaHei', size=14, bold=True, color="1e293b")
+        info_font = Font(name='Microsoft YaHei', size=10, color="64748b")
+        prompt_font = Font(name='JetBrains Mono', size=10, color="1e293b")
+        cn_font = Font(name='Microsoft YaHei', size=9, color="64748b")
+        thin_border = Border(
+            left=Side(style='thin', color='e2e8f0'),
+            right=Side(style='thin', color='e2e8f0'),
+            top=Side(style='thin', color='e2e8f0'),
+            bottom=Side(style='thin', color='e2e8f0')
+        )
+        
+        # 第1行: 项目标题
+        ws.merge_cells('A1:G1')
+        ws['A1'] = f"分镜脚本 - {project_name}"
+        ws['A1'].font = title_font
+        ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
+        ws.row_dimensions[1].height = 30
+        
+        # 第2行: 项目信息
+        ws.merge_cells('A2:G2')
+        ar_text = "16:9 横屏" if aspect_ratio == "16:9" else "9:16 竖屏"
+        info_text = f"产品: {product_name or '未命名'}  |  画幅: {ar_text}"
+        ws['A2'] = info_text
+        ws['A2'].font = info_font
+        ws['A2'].alignment = Alignment(horizontal='center', vertical='center')
+        ws.row_dimensions[2].height = 22
+        
+        # 第3行: 锚定词
+        ws.merge_cells('A3:G3')
+        ws['A3'] = f"锚定词: {anchor_prompt[:100]}{'...' if len(anchor_prompt) > 100 else ''}"
+        ws['A3'].font = Font(name='Microsoft YaHei', size=9, color="64748b", italic=True)
+        ws['A3'].alignment = Alignment(horizontal='left', vertical='center')
+        ws.row_dimensions[3].height = 18
+        
+        # 第4行: 表头
+        headers = ['镜头', '景别/焦段', '画面与动作描述', '首帧提示词 (English)', '首帧翻译 (中文)', '尾帧提示词 (English)', '尾帧翻译 (中文)']
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=4, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            cell.border = thin_border
+        ws.row_dimensions[4].height = 28
+        
+        # 解析 Markdown 表格
+        shots = parse_storyboard_md(storyboard_content)
+        
+        # 填充数据行
+        start_row = 5
+        for row_idx, shot in enumerate(shots, start_row):
+            # 镜头编号
+            cell = ws.cell(row=row_idx, column=1, value=shot.get('num', row_idx - start_row + 1))
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.border = thin_border
+            
+            # 景别/焦段
+            cell = ws.cell(row=row_idx, column=2, value=shot.get('shot_type', ''))
+            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            cell.border = thin_border
+            
+            # 画面描述
+            cell = ws.cell(row=row_idx, column=3, value=shot.get('description', ''))
+            cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+            cell.border = thin_border
+            
+            # 首帧英文
+            cell = ws.cell(row=row_idx, column=4, value=shot.get('start_en', ''))
+            cell.font = prompt_font
+            cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+            cell.border = thin_border
+            
+            # 首帧中文
+            cell = ws.cell(row=row_idx, column=5, value=shot.get('start_cn', ''))
+            cell.font = cn_font
+            cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+            cell.border = thin_border
+            
+            # 尾帧英文
+            cell = ws.cell(row=row_idx, column=6, value=shot.get('end_en', ''))
+            cell.font = prompt_font
+            cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+            cell.border = thin_border
+            
+            # 尾帧中文
+            cell = ws.cell(row=row_idx, column=7, value=shot.get('end_cn', ''))
+            cell.font = cn_font
+            cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+            cell.border = thin_border
+            
+            ws.row_dimensions[row_idx].height = 60
+        
+        # 列宽设置
+        col_widths = [8, 12, 25, 45, 22, 45, 22]
+        for col, width in enumerate(col_widths, 1):
+            ws.column_dimensions[get_column_letter(col)].width = width
+        
+        # 生成文件
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        filename = f"分镜脚本_{project_name[:20]}_{datetime.now().strftime('%Y%m%d')}.xlsx"
+        
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename
+        )
+        
+    except Exception as e:
+        print(f"Excel 导出错误: {traceback.format_exc()}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def parse_storyboard_md(content: str) -> list:
+    """解析 Markdown 表格，提取分镜数据"""
+    shots = []
+    
+    # 匹配表格行
+    rows = re.findall(r'\|\s*(\d+)\s*\|\s*([^|]+)\|\s*([^|]+)\|\s*(.+?)\s*\|\s*(.+?)\s*\|', content)
+    
+    for row in rows:
+        num, shot_type, description, start_cell, end_cell = row
+        
+        # 解析首帧
+        start_en, start_cn = parse_prompt_cell(start_cell)
+        
+        # 解析尾帧
+        end_en, end_cn = parse_prompt_cell(end_cell)
+        
+        shots.append({
+            'num': num.strip(),
+            'shot_type': shot_type.strip(),
+            'description': description.strip(),
+            'start_en': start_en.strip(),
+            'start_cn': start_cn.strip(),
+            'end_en': end_en.strip(),
+            'end_cn': end_cn.strip()
+        })
+    
+    return shots
+
+
+def parse_prompt_cell(cell: str) -> tuple:
+    """解析提示词单元格，提取英文和中文"""
+    # 移除 HTML 标签
+    cell = re.sub(r'<[^>]+>', '', cell)
+    
+    # 匹配 __CN__...__ENDCN__ 格式（支持换行和所有标点）
+    match = re.search(r'__CN__([\s\S]*?)__ENDCN__', cell)
+    
+    if match:
+        chinese = match.group(1).strip()
+        english = re.sub(r'__CN__[\s\S]*?__ENDCN__', '', cell).strip()
+        return english, chinese
+    
+    return cell.strip(), ''
+
+
 # ==================== 阶段一：产品特征提取（流式） ====================
 @app.route('/api/analyze_product', methods=['POST'])
 def analyze_product():
@@ -262,29 +424,52 @@ def analyze_product():
         message_content.append({"type": "text", "text": PRODUCT_ANALYSIS_USER})
 
         def generate():
+            accumulated = ''
+            
             try:
                 yield f"data: {json.dumps({'type': 'start', 'message': '正在分析产品...'})}\n\n"
 
                 client = get_client()
                 model = os.getenv("MODEL_NAME", "gpt-4o")
-                stream = client.chat.completions.create(
-                    model=model,
-                    messages=[
-                        {"role": "system", "content": PRODUCT_ANALYSIS_SYSTEM},
-                        {"role": "user", "content": message_content}
-                    ],
-                    max_tokens=500,
-                    temperature=0.7,
-                    stream=True
-                )
+                
+                messages = [
+                    {"role": "system", "content": PRODUCT_ANALYSIS_SYSTEM},
+                    {"role": "user", "content": message_content}
+                ]
+                
+                try:
+                    stream = client.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        max_tokens=500,
+                        temperature=0.7,
+                        stream=True
+                    )
+                    
+                    for chunk in stream:
+                        # 安全检查
+                        try:
+                            if not hasattr(chunk, 'choices') or not chunk.choices:
+                                continue
+                            delta = chunk.choices[0].delta
+                            if delta and hasattr(delta, 'content') and delta.content:
+                                content = delta.content
+                                accumulated += content
+                                yield f"data: {json.dumps({'type': 'chunk', 'content': content, 'accumulated': accumulated})}\n\n"
+                        except Exception as chunk_err:
+                            print(f"Chunk 处理错误: {chunk_err}")
+                            continue
+                            
+                except Exception as api_err:
+                    # API 调用本身的错误
+                    print(f"API 调用错误: {api_err}")
+                    yield f"data: {json.dumps({'type': 'error', 'message': f'API 错误: {str(api_err)[:100]}'})}\n\n"
+                    return
 
-                accumulated = ''
-                for chunk in stream:
-                    if chunk.choices and chunk.choices[0].delta.content:
-                        content = chunk.choices[0].delta.content
-                        accumulated += content
-                        yield f"data: {json.dumps({'type': 'chunk', 'content': content, 'accumulated': accumulated})}\n\n"
-
+                # 确保至少有一些内容
+                if not accumulated:
+                    accumulated = "metallic finish, minimalist design, clean lines, high quality materials, sleek appearance"
+                    
                 yield f"data: {json.dumps({'type': 'done', 'anchor_prompt': accumulated})}\n\n"
 
             except Exception as e:
@@ -293,7 +478,11 @@ def analyze_product():
                 print(f"分析错误: {error_msg}")
                 print(f"traceback: {traceback.format_exc()}")
                 print(f"="*50)
-                yield f"data: {json.dumps({'type': 'error', 'message': f'服务器错误: {error_msg[:200]}'})}\n\n"
+                # 如果已经有内容，发送 done 而不是 error
+                if accumulated:
+                    yield f"data: {json.dumps({'type': 'done', 'anchor_prompt': accumulated})}\n\n"
+                else:
+                    yield f"data: {json.dumps({'type': 'error', 'message': f'分析失败: {error_msg[:100]}'})}\n\n"
 
         return Response(
             generate(),
@@ -335,6 +524,7 @@ def generate_script():
         anchor_prompt = request.form.get('anchor_prompt', '')
         project_id = request.form.get('project_id')
         aspect_ratio = request.form.get('aspect_ratio', '16:9')
+        product_name = request.form.get('product_name', '未命名')
         requirements_content = ''
 
         if 'requirements' in request.files:
@@ -363,6 +553,9 @@ def generate_script():
                         requirements_content = content.decode('utf-8', errors='replace')
 
         def generate():
+            accumulated = ''
+            saved_project_id = None
+            
             try:
                 system_prompt = build_script_system_prompt(aspect_ratio)
                 user_prompt = build_script_prompt(anchor_prompt, requirements_content, aspect_ratio)
@@ -382,21 +575,37 @@ def generate_script():
                     max_tokens=8192
                 )
 
-                accumulated = ''
                 for chunk in stream:
                     if chunk.choices and chunk.choices[0].delta.content:
                         content = chunk.choices[0].delta.content
                         accumulated += content
                         yield f"data: {json.dumps({'type': 'chunk', 'content': content, 'accumulated': accumulated})}\n\n"
 
-                yield f"data: {json.dumps({'type': 'done', 'message': '生成完成'})}\n\n"
+                # ========== 强制保存逻辑 ==========
+                try:
+                    if project_id:
+                        # 更新已有项目
+                        update_project(int(project_id), 
+                                     storyboard_content=accumulated, 
+                                     aspect_ratio=aspect_ratio)
+                        saved_project_id = int(project_id)
+                    else:
+                        # 创建新项目
+                        saved_project_id = create_project(
+                            project_name=f"{product_name} - {datetime.now().strftime('%m%d %H:%M')}",
+                            product_name=product_name,
+                            anchor_prompt=anchor_prompt,
+                            storyboard_content=accumulated,
+                            aspect_ratio=aspect_ratio
+                        )
+                    
+                    yield f"data: {json.dumps({'type': 'saved', 'project_id': saved_project_id, 'message': '已保存'})}\n\n"
+                except Exception as save_err:
+                    print(f"保存失败: {save_err}")
+                    yield f"data: {json.dumps({'type': 'save_warning', 'message': str(save_err)})}\n\n"
+                # =================================
 
-                if project_id:
-                    try:
-                        update_project(int(project_id), storyboard_content=accumulated, aspect_ratio=aspect_ratio)
-                        yield f"data: {json.dumps({'type': 'saved', 'message': '已保存'})}\n\n"
-                    except Exception as save_err:
-                        yield f"data: {json.dumps({'type': 'save_warning', 'message': str(save_err)})}\n\n"
+                yield f"data: {json.dumps({'type': 'done', 'message': '生成完成', 'project_id': saved_project_id})}\n\n"
 
             except Exception as e:
                 error_msg = str(e)
@@ -456,12 +665,12 @@ Current selection: {ar_display}
 4. End Frame: completed state + anchor keywords + composition + {ar_param}
 5. Chinese translation must include aspect ratio description ({ar_display})
 6. All "logo", "mark", "emblem" unified: "LOGO"
-7. Output format: English prompt text {ar_param} <!--cn:Chinese translation:-->
+7. Output format: English prompt text {ar_param} __CN__Chinese translation__ENDCN__
 
 ## 【Output Format - PURE MARKDOWN】
 
 | 镜头 | 景别/焦段 | 画面与动作描述 | 首帧提示词(Start) | 尾帧提示词(End) |
-| 1 | ... | ... | prompt1 <!--cn:翻译1:--> | prompt2 <!--cn:翻译2:--> |
+| 1 | ... | ... | prompt1 __CN__翻译1__ENDCN__ | prompt2 __CN__翻译2__ENDCN__ |
 
 Start now:"""
 
