@@ -35,12 +35,6 @@ def init_database():
         )
     ''')
 
-    # 迁移旧数据：添加 aspect_ratio 列（如果不存在）
-    try:
-        cursor.execute("ALTER TABLE projects ADD COLUMN aspect_ratio TEXT DEFAULT '16:9'")
-    except sqlite3.OperationalError:
-        pass  # 列已存在
-
     conn.commit()
     conn.close()
 
@@ -72,7 +66,8 @@ def update_project(
     project_id: int,
     anchor_prompt: str = None,
     storyboard_content: str = None,
-    aspect_ratio: str = None
+    aspect_ratio: str = None,
+    project_name: str = None
 ):
     """更新项目内容"""
     conn = get_connection()
@@ -92,6 +87,10 @@ def update_project(
     if aspect_ratio is not None:
         updates.append("aspect_ratio = ?")
         params.append(aspect_ratio)
+
+    if project_name is not None:
+        updates.append("project_name = ?")
+        params.append(project_name)
 
     if updates:
         updates.append("updated_at = CURRENT_TIMESTAMP")
@@ -148,6 +147,24 @@ def delete_project(project_id: int) -> bool:
     conn.close()
 
     return deleted
+
+
+def rename_project(project_id: int, new_name: str) -> bool:
+    """重命名项目"""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        UPDATE projects
+        SET project_name = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+    ''', (new_name, project_id))
+    
+    updated = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+
+    return updated
 
 
 # 初始化数据库

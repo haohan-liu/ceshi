@@ -3,131 +3,139 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 商业视频制片工作台</title>
+    <title>AI Storyboard Studio</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-
         * { box-sizing: border-box; }
-        body { font-family: 'Inter', sans-serif; }
-        html, body { overflow: hidden; height: 100%; }
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+        html, body { height: 100%; overflow: hidden; }
 
-        /* 自定义滚动条 */
-        .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
-        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
-        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-        .custom-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        /* 企业级滚动条 */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
 
-        /* 视图切换动画 */
-        .view-transition { transition: opacity 0.4s ease, transform 0.4s ease; }
+        /* 视图切换 */
+        .view-transition { transition: opacity 0.3s ease, transform 0.3s ease; }
         .view-hidden { opacity: 0; pointer-events: none; position: absolute; inset: 0; }
 
-        /* 设置 Modal */
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); z-index: 100; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
-        .modal-overlay.show { opacity: 1; pointer-events: auto; }
-        .modal-box { background: white; border-radius: 16px; width: 90%; max-width: 520px; box-shadow: 0 25px 50px rgba(0,0,0,0.25); transform: scale(0.95) translateY(10px); transition: transform 0.3s; }
-        .modal-overlay.show .modal-box { transform: scale(1) translateY(0); }
+        /* 卡片样式 - 企业级亮色 */
+        .card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; }
+        .card-header { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; }
+        .card-body { padding: 16px; }
 
-        /* 画幅选择器 */
-        .ar-option { transition: all 0.2s; position: relative; overflow: hidden; }
-        .ar-option::before { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); opacity: 0; transition: opacity 0.2s; }
-        .ar-option.selected::before { opacity: 1; }
-        .ar-option.selected { color: white; border-color: #4f46e5; }
-        .ar-option:not(.selected):hover { border-color: #818cf8; transform: translateY(-1px); }
+        /* 分段控制器 */
+        .segment-control { display: inline-flex; background: #f1f5f9; border-radius: 6px; padding: 2px; }
+        .segment-btn { padding: 6px 14px; font-size: 13px; font-weight: 500; color: #64748b; border-radius: 4px; cursor: pointer; transition: all 0.15s; }
+        .segment-btn:hover { color: #334155; }
+        .segment-btn.active { background: white; color: #0f172a; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
 
-        /* 加载动画 */
-        .spinner { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
+        /* 上传区域 */
+        .upload-zone { border: 1.5px dashed #e2e8f0; border-radius: 8px; transition: all 0.2s; cursor: pointer; }
+        .upload-zone:hover { border-color: #94a3b8; background: #fafafa; }
+        .upload-zone.dragover { border-color: #6366f1; background: #eef2ff; }
+
+        /* 图片网格 */
+        .image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 8px; }
+        .image-thumb { position: relative; aspect-ratio: 1; border-radius: 6px; overflow: hidden; border: 1px solid #e2e8f0; }
+        .image-thumb img { width: 100%; height: 100%; object-fit: cover; }
+        .image-thumb .remove-btn { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; background: rgba(239,68,68,0.9); border-radius: 50%; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.15s; cursor: pointer; }
+        .image-thumb:hover .remove-btn { opacity: 1; }
+
+        /* 历史记录项 */
+        .history-item { position: relative; padding: 10px 12px; border-radius: 6px; cursor: pointer; transition: background 0.15s; }
+        .history-item:hover { background: #f8fafc; }
+        .history-item.active { background: #f0fdf4; }
+        .history-item.active .history-name { color: #166534; font-weight: 600; }
+        .history-actions { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s; }
+        .history-item:hover .history-actions { opacity: 1; }
+        .history-action-btn { width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #64748b; transition: all 0.15s; }
+        .history-action-btn:hover { background: #e2e8f0; color: #334155; }
+        .history-action-btn.delete:hover { background: #fee2e2; color: #dc2626; }
 
         /* Toast */
-        .toast { position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%) translateY(100px); padding: 12px 24px; background: #1e293b; border-radius: 12px; color: white; font-size: 14px; font-weight: 500; z-index: 1000; opacity: 0; transition: all 0.3s ease; box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
-        .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+        .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px); padding: 10px 20px; background: #0f172a; border-radius: 8px; color: white; font-size: 14px; font-weight: 500; z-index: 1000; opacity: 0; transition: all 0.25s ease; }
 
-        /* 图片预览 */
-        .img-thumb { position: relative; width: 56px; height: 56px; border-radius: 12px; overflow: hidden; border: 2px solid #e2e8f0; transition: all 0.2s; }
-        .img-thumb:hover { border-color: #818cf8; transform: scale(1.05); }
-        .img-thumb img { width: 100%; height: 100%; object-fit: cover; }
-        .img-thumb .overlay { position: absolute; inset: 0; background: rgba(239,68,68,0.85); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; cursor: pointer; }
-        .img-thumb:hover .overlay { opacity: 1; }
+        /* Modal */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.4); backdrop-filter: blur(4px); z-index: 100; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+        .modal-overlay.show { opacity: 1; pointer-events: auto; }
+        .modal-box { background: white; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); width: 90%; max-width: 800px; max-height: 80vh; overflow: hidden; transform: scale(0.95); transition: transform 0.2s; }
+        .modal-overlay.show .modal-box { transform: scale(1); }
 
-        /* 复制按钮成功状态 */
-        .copy-btn { transition: all 0.2s; }
-        .copy-btn.success { background: #10b981 !important; }
+        /* Console 表格 */
+        .console-content { background: white; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+        .console-content table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .console-content th { background: #f8fafc; padding: 10px 12px; text-align: center; font-weight: 600; color: #334155; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+        .console-content td { padding: 12px; border-bottom: 1px solid #f1f5f9; text-align: center; vertical-align: middle; }
+        .console-content tr:hover td { background: #fafafa; }
 
-        /* Console 深色表格 */
-        .console-dark { background: #0f172a; border-radius: 16px; overflow: hidden; }
-        .console-dark table { width: 100%; border-collapse: collapse; }
-        .console-dark table th { background: #1e293b; padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #334155; }
-        .console-dark table td { padding: 16px; border-bottom: 1px solid #1e293b; vertical-align: top; color: #e2e8f0; line-height: 1.6; }
-        .console-dark table tr:last-child td { border-bottom: none; }
-        .console-dark table tr:hover td { background: #1a2438; }
-
-        /* 提示词悬浮 */
-        .prompt-span { cursor: pointer; border-bottom: 1px dashed #64748b; transition: color 0.2s, border-color 0.2s; }
-        .prompt-span:hover { color: #818cf8; border-color: #818cf8; }
-
-        /* 单元格操作按钮 */
-        .cell-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; opacity: 0; transition: opacity 0.2s; }
-        .cell-actions button { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
-        .cell-actions button:hover { transform: scale(1.1); }
-        .btn-copy { background: #3b82f6; }
-        .btn-copy:hover { background: #2563eb; }
-        .btn-expand { background: #8b5cf6; }
-        .btn-expand:hover { background: #7c3aed; }
-
+        /* Prompt 单元格操作 */
         .prompt-cell { position: relative; }
-        .prompt-cell:hover .cell-actions { opacity: 1; }
-
-        /* 历史项 */
-        .history-item { transition: all 0.2s; }
-        .history-item:hover { background: #f1f5f9; }
-        .history-item.active { background: #eef2ff !important; }
-        .history-item.active .history-name { color: #4f46e5 !important; font-weight: 600; }
+        .prompt-cell .actions { position: absolute; top: 4px; right: 4px; display: flex; gap: 3px; opacity: 0; transition: opacity 0.15s; }
+        .prompt-cell:hover .actions { opacity: 1; }
+        .action-btn { width: 26px; height: 26px; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: white; cursor: pointer; transition: transform 0.1s; }
+        .action-btn:hover { transform: scale(1.1); }
+        .copy-btn { background: #3b82f6; }
+        .expand-btn { background: #8b5cf6; }
 
         /* 打字机光标 */
-        .typewriter-cursor { display: inline-block; width: 2px; height: 1em; background: #4f46e5; margin-left: 2px; animation: blink 1s infinite; }
+        .typewriter-cursor { display: inline-block; width: 1.5px; height: 1em; background: #6366f1; margin-left: 1px; animation: blink 0.8s infinite; }
         @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
 
-        /* 输入框聚焦 */
-        input:focus, textarea:focus { outline: none; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15); }
+        /* 输入框 */
+        input, textarea { font-family: inherit; }
+        input:focus, textarea:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
 
-        /* 标签页样式 */
-        .tab-active { background: white !important; color: #4f46e5 !important; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        /* 按钮 */
+        .btn-primary { background: #0f172a; color: white; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; transition: background 0.15s; }
+        .btn-primary:hover { background: #1e293b; }
+        .btn-primary:disabled { background: #94a3b8; cursor: not-allowed; }
+        .btn-secondary { background: white; color: #334155; border: 1px solid #e2e8f0; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; transition: all 0.15s; }
+        .btn-secondary:hover { background: #f8fafc; border-color: #cbd5e1; }
+
+        /* Spinner */
+        .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spinner-dark { border-color: rgba(0,0,0,0.1); border-top-color: #0f172a; }
     </style>
 </head>
 <body class="bg-slate-50">
     <div class="flex h-screen w-screen overflow-hidden">
         <!-- ==================== 左侧边栏 ==================== -->
-        <aside class="w-[280px] bg-white border-r border-slate-200 flex flex-col flex-shrink-0">
+        <aside class="w-[260px] bg-white border-r border-slate-200 flex flex-col flex-shrink-0">
             <!-- Logo -->
-            <div class="p-5 border-b border-slate-100">
+            <div class="p-4 border-b border-slate-100">
                 <div class="flex items-center gap-3 mb-4">
-                    <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
                         </svg>
                     </div>
                     <div>
-                        <h1 class="text-base font-bold text-slate-800">制片工作台</h1>
-                        <p class="text-xs text-slate-400">AI Storyboard Studio</p>
+                        <h1 class="text-sm font-semibold text-slate-900">Storyboard</h1>
+                        <p class="text-[10px] text-slate-400">AI Studio</p>
                     </div>
                 </div>
-                <button onclick="createNewProject()" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                <button onclick="createNewProject()" class="w-full bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                     新建项目
                 </button>
             </div>
 
             <!-- 历史列表 -->
-            <div class="flex-1 overflow-y-auto custom-scroll p-3">
-                <div class="text-[10px] text-slate-400 uppercase tracking-widest font-semibold mb-2 px-2">历史记录</div>
-                <div id="historyList" class="space-y-1"></div>
+            <div class="flex-1 overflow-y-auto p-3">
+                <div class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-2 px-2">历史记录</div>
+                <div id="historyList" class="space-y-0.5"></div>
             </div>
 
             <!-- 底部版权 -->
             <div class="p-3 border-t border-slate-100 text-center">
-                <p class="text-xs text-slate-400">© 2026 浩涵 All Rights Reserved</p>
+                <p class="text-[10px] text-slate-400">© 2026 浩涵 All Rights Reserved</p>
             </div>
         </aside>
 
@@ -135,63 +143,53 @@
         <main class="flex-1 flex flex-col overflow-hidden relative">
             <!-- 视图 A: 输入页 -->
             <div id="inputView" class="view-transition flex-1 flex flex-col overflow-hidden">
-                <div class="flex-1 overflow-y-auto custom-scroll p-8">
-                    <div class="max-w-4xl mx-auto space-y-6">
+                <div class="flex-1 overflow-y-auto p-6">
+                    <div class="max-w-3xl mx-auto space-y-5">
                         <!-- 标题 -->
-                        <div class="text-center mb-8">
-                            <h2 class="text-2xl font-bold text-slate-800 mb-2">创建您的分镜脚本</h2>
-                            <p class="text-slate-500">上传产品图 → 提取特征 → 生成专业脚本</p>
+                        <div class="text-center mb-6">
+                            <h2 class="text-xl font-semibold text-slate-900 mb-1">创建分镜脚本</h2>
+                            <p class="text-sm text-slate-500">上传产品图 → 提取特征 → 生成专业脚本</p>
                         </div>
 
                         <!-- Phase 1: 资产锚定 -->
-                        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                            <div class="px-6 py-4 bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center gap-3">
-                                <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white font-bold">1</div>
+                        <div class="card">
+                            <div class="card-header flex items-center gap-3">
+                                <div class="w-6 h-6 bg-slate-900 text-white rounded flex items-center justify-center text-xs font-semibold">1</div>
                                 <div>
-                                    <h3 class="text-white font-semibold">产品资产锚定</h3>
-                                    <p class="text-white/70 text-xs">提取产品视觉特征作为锚定词</p>
+                                    <h3 class="text-sm font-semibold text-slate-900">产品资产锚定</h3>
+                                    <p class="text-[11px] text-slate-500">提取产品视觉特征作为锚定词</p>
                                 </div>
                             </div>
-                            <div class="p-6 space-y-4">
+                            <div class="card-body space-y-4">
                                 <!-- 项目名称 -->
                                 <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-2">项目名称</label>
-                                    <input type="text" id="projectName" class="w-full px-4 py-3 border border-slate-200 rounded-xl focus:border-indigo-500 transition-colors" placeholder="例如：智能手表产品视频">
+                                    <label class="block text-xs font-medium text-slate-600 mb-1.5">项目名称</label>
+                                    <input type="text" id="projectName" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" placeholder="例如：智能手表产品视频">
                                 </div>
 
                                 <!-- 产品图片 -->
                                 <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-2">产品图片（最多5张）</label>
-                                    <div id="uploadZone1" class="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-indigo-400 hover:bg-indigo-50/30 cursor-pointer transition-all">
-                                        <input type="file" id="productImages" multiple accept="image/*" class="hidden">
-                                        <div class="flex flex-col items-center gap-2">
-                                            <div class="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
-                                                <svg class="w-6 h-6 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                                            </div>
-                                            <div>
-                                                <p class="text-sm font-medium text-slate-600">点击或拖拽上传图片</p>
-                                                <p class="text-xs text-slate-400 mt-1">支持 JPG, PNG 格式</p>
-                                            </div>
-                                        </div>
+                                    <label class="block text-xs font-medium text-slate-600 mb-1.5">产品图片（最多10张）</label>
+                                    <div id="uploadArea">
+                                        <!-- 动态渲染上传区域 -->
                                     </div>
-                                    <div id="imagePreviewGrid" class="flex gap-3 mt-3 flex-wrap"></div>
                                 </div>
 
                                 <!-- 提取按钮 -->
-                                <button onclick="analyzeProduct()" id="analyzeBtn" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold py-3 px-6 rounded-xl flex items-center justify-center gap-2 transition-all">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+                                <button onclick="analyzeProduct()" id="analyzeBtn" class="btn-primary w-full py-2.5 flex items-center justify-center gap-2">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
                                     提取产品特征
                                 </button>
 
                                 <!-- 锚定词 -->
                                 <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-2">锚定描述词</label>
+                                    <label class="block text-xs font-medium text-slate-600 mb-1.5">锚定描述词</label>
                                     <div class="relative">
-                                        <textarea id="anchorPrompt" rows="3" class="w-full px-4 py-3 border border-slate-200 rounded-xl focus:border-indigo-500 transition-colors resize-none font-mono text-sm" placeholder="提取后将显示产品特征描述..."></textarea>
-                                        <span id="anchorCursor" class="typewriter-cursor absolute hidden" style="top: 12px; left: 16px;"></span>
+                                        <textarea id="anchorPrompt" rows="3" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono resize-none" placeholder="提取后将显示产品特征描述..."></textarea>
+                                        <span id="anchorCursor" class="typewriter-cursor absolute hidden" style="top: 10px; left: 14px;"></span>
                                     </div>
-                                    <button onclick="useAnchorPrompt()" id="useAnchorBtn" class="mt-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium hidden flex items-center gap-1">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path></svg>
+                                    <button onclick="useAnchorPrompt()" id="useAnchorBtn" class="mt-2 text-xs text-indigo-600 hover:text-indigo-800 font-medium hidden flex items-center gap-1">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path></svg>
                                         使用此锚定词继续生成
                                     </button>
                                 </div>
@@ -199,68 +197,56 @@
                         </div>
 
                         <!-- Phase 2: 分镜生成 -->
-                        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                            <div class="px-6 py-4 bg-gradient-to-r from-purple-500 to-pink-500 flex items-center gap-3">
-                                <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white font-bold">2</div>
+                        <div class="card">
+                            <div class="card-header flex items-center gap-3">
+                                <div class="w-6 h-6 bg-slate-900 text-white rounded flex items-center justify-center text-xs font-semibold">2</div>
                                 <div>
-                                    <h3 class="text-white font-semibold">分镜脚本生成</h3>
-                                    <p class="text-white/70 text-xs">上传需求表，生成专业分镜</p>
+                                    <h3 class="text-sm font-semibold text-slate-900">分镜脚本生成</h3>
+                                    <p class="text-[11px] text-slate-500">上传需求表，生成专业分镜</p>
                                 </div>
                             </div>
-                            <div class="p-6 space-y-4">
+                            <div class="card-body space-y-4">
                                 <!-- 画幅选择 -->
                                 <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-2">画幅比例</label>
-                                    <div class="flex gap-3">
-                                        <div class="ar-option flex-1 p-4 border-2 border-slate-200 rounded-xl cursor-pointer selected" data-value="16:9" onclick="selectAR(this)">
-                                            <div class="relative z-10 flex flex-col items-center gap-2">
-                                                <svg class="w-10 h-6 text-current opacity-80" viewBox="0 0 40 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="38" height="22" rx="3"/></svg>
-                                                <span class="text-sm font-semibold">16:9</span>
-                                                <span class="text-xs opacity-70">横屏电影</span>
-                                            </div>
-                                        </div>
-                                        <div class="ar-option flex-1 p-4 border-2 border-slate-200 rounded-xl cursor-pointer" data-value="9:16" onclick="selectAR(this)">
-                                            <div class="relative z-10 flex flex-col items-center gap-2">
-                                                <svg class="w-6 h-10 text-current opacity-80" viewBox="0 0 24 40" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="22" height="38" rx="3"/></svg>
-                                                <span class="text-sm font-semibold">9:16</span>
-                                                <span class="text-xs opacity-70">竖屏手机</span>
-                                            </div>
-                                        </div>
+                                    <label class="block text-xs font-medium text-slate-600 mb-1.5">画幅比例</label>
+                                    <div class="segment-control">
+                                        <div class="segment-btn active" data-value="16:9" onclick="selectAR(this)">16:9 横屏</div>
+                                        <div class="segment-btn" data-value="9:16" onclick="selectAR(this)">9:16 竖屏</div>
                                     </div>
                                 </div>
 
                                 <!-- 需求表上传 -->
                                 <div>
-                                    <label class="block text-sm font-medium text-slate-700 mb-2">镜头需求表</label>
-                                    <div id="uploadZone2" class="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-purple-400 hover:bg-purple-50/30 cursor-pointer transition-all">
-                                        <input type="file" id="requirementsFile" accept=".csv,.xlsx,.xls" class="hidden">
-                                        <div class="flex flex-col items-center gap-2">
-                                            <div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
-                                                <svg class="w-6 h-6 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                    <label class="block text-xs font-medium text-slate-600 mb-1.5">镜头需求表</label>
+                                    <div id="requirementsUploadArea">
+                                        <div id="uploadZone2" class="upload-zone p-8 text-center">
+                                            <input type="file" id="requirementsFile" accept=".csv,.xlsx,.xls" class="hidden">
+                                            <div class="flex flex-col items-center gap-2">
+                                                <div class="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center">
+                                                    <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                                </div>
+                                                <div>
+                                                    <p class="text-sm font-medium text-slate-600">点击或拖拽上传需求表</p>
+                                                    <p class="text-xs text-slate-400 mt-0.5">支持 CSV, Excel 格式</p>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <p class="text-sm font-medium text-slate-600">点击上传需求表</p>
-                                                <p class="text-xs text-slate-400 mt-1">支持 CSV, Excel 格式</p>
+                                        </div>
+                                        <div id="fileInfo" class="hidden mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center gap-3">
+                                            <div class="w-8 h-8 bg-slate-200 rounded flex items-center justify-center">
+                                                <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                                             </div>
+                                            <div class="flex-1 min-w-0">
+                                                <p id="fileName" class="text-sm font-medium text-slate-700 truncate"></p>
+                                                <p class="text-[10px] text-slate-400">已上传</p>
+                                            </div>
+                                            <button onclick="removeFile()" class="text-xs text-slate-500 hover:text-red-600">删除</button>
                                         </div>
-                                    </div>
-                                    <div id="fileInfo" class="hidden mt-3 p-3 bg-purple-50 rounded-xl flex items-center gap-3">
-                                        <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                                            <svg class="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                                        </div>
-                                        <div class="flex-1 min-w-0">
-                                            <p id="fileName" class="text-sm font-medium text-slate-700 truncate"></p>
-                                            <p class="text-xs text-slate-400">已选择</p>
-                                        </div>
-                                        <button onclick="removeFile()" class="text-slate-400 hover:text-red-500 transition-colors">
-                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                        </button>
                                     </div>
                                 </div>
 
                                 <!-- 生成按钮 -->
-                                <button onclick="generateScript()" id="generateBtn" class="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold py-3 px-6 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                                <button onclick="generateScript()" id="generateBtn" class="btn-primary w-full py-2.5 flex items-center justify-center gap-2">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                                     生成专业脚本
                                 </button>
                             </div>
@@ -269,40 +255,37 @@
                 </div>
             </div>
 
-            <!-- 视图 B: 生成页 (Console) -->
+            <!-- 视图 B: Console -->
             <div id="consoleView" class="view-transition view-hidden flex-1 flex flex-col overflow-hidden">
-                <!-- 顶部工具栏 -->
-                <div class="px-6 py-4 border-b border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
+                <!-- 工具栏 -->
+                <div class="px-5 py-3 border-b border-slate-200 bg-white flex items-center justify-between flex-shrink-0">
                     <div class="flex items-center gap-3">
-                        <div class="flex gap-1.5">
-                            <div class="w-3 h-3 rounded-full bg-red-400"></div>
-                            <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
-                            <div class="w-3 h-3 rounded-full bg-green-400"></div>
+                        <div class="flex items-center gap-2">
+                            <div class="w-2.5 h-2.5 rounded-full bg-red-400"></div>
+                            <div class="w-2.5 h-2.5 rounded-full bg-yellow-400"></div>
+                            <div class="w-2.5 h-2.5 rounded-full bg-green-400"></div>
                         </div>
-                        <span class="text-sm text-slate-500 font-mono">Storyboard Console</span>
-                        <span id="arBadge" class="px-2 py-0.5 bg-indigo-100 text-indigo-600 text-xs font-medium rounded-full">16:9</span>
+                        <span class="text-xs text-slate-500 font-mono">Storyboard Console</span>
+                        <span id="arBadge" class="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-medium rounded">16:9</span>
                     </div>
                     <div class="flex items-center gap-4">
                         <span id="statusText" class="text-xs text-slate-400">就绪</span>
-                        <span id="charCount" class="text-xs text-slate-400">0 chars</span>
-                        <button onclick="copyConsole()" class="text-xs text-slate-500 hover:text-indigo-600 transition-colors">复制</button>
-                        <button onclick="downloadConsole()" class="text-xs text-slate-500 hover:text-indigo-600 transition-colors">下载</button>
-                        <button onclick="switchToInput()" class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-medium rounded-lg transition-colors">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                            修改配置
-                        </button>
+                        <span id="charCount" class="text-xs text-slate-400">0 个字符</span>
+                        <button onclick="copyConsole()" class="text-xs text-slate-500 hover:text-slate-900">复制</button>
+                        <button onclick="downloadConsole()" class="text-xs text-slate-500 hover:text-slate-900">下载</button>
+                        <button onclick="switchToInput()" class="btn-secondary py-1.5 px-3 text-xs">返回编辑</button>
                     </div>
                 </div>
 
                 <!-- Console 内容 -->
-                <div class="flex-1 overflow-y-auto custom-scroll p-6 bg-slate-50">
-                    <div id="console" class="console-dark p-6 min-h-full">
-                        <div class="text-center text-slate-400 py-20">
-                            <div class="w-16 h-16 mx-auto bg-slate-800 rounded-2xl flex items-center justify-center mb-4">
-                                <div class="spinner"></div>
+                <div class="flex-1 overflow-y-auto p-5 bg-slate-50">
+                    <div id="console" class="console-content p-5 min-h-full">
+                        <div class="text-center py-16">
+                            <div class="w-12 h-12 mx-auto bg-slate-100 rounded-xl flex items-center justify-center mb-4">
+                                <div class="spinner spinner-dark"></div>
                             </div>
-                            <p class="text-lg font-medium text-slate-300">正在生成...</p>
-                            <p class="text-sm mt-2 text-slate-500">请稍候，分镜脚本生成中</p>
+                            <p class="text-sm font-medium text-slate-600">正在生成...</p>
+                            <p class="text-xs text-slate-400 mt-1">请稍候，分镜脚本生成中</p>
                         </div>
                     </div>
                 </div>
@@ -312,28 +295,47 @@
 
     <!-- 详情 Modal -->
     <div id="detailModal" class="modal-overlay" onclick="closeDetail(event)">
-        <div class="modal-box" onclick="event.stopPropagation()" style="max-width: 900px;">
-            <div class="p-5 border-b border-slate-200 flex items-center justify-between">
-                <h3 class="text-lg font-bold text-slate-800">提示词详情</h3>
+        <div class="modal-box" onclick="event.stopPropagation()">
+            <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+                <h3 class="text-sm font-semibold text-slate-900">提示词详情</h3>
                 <button onclick="closeDetail()" class="text-slate-400 hover:text-slate-600">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
             </div>
-            <div class="p-6 max-h-[55vh] overflow-y-auto custom-scroll">
+            <div class="p-4 max-h-[50vh] overflow-y-auto">
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-xs text-slate-500 mb-2 uppercase tracking-wider font-semibold">English Prompt</label>
-                        <div id="detailEnglish" class="bg-slate-900 p-5 rounded-xl font-mono text-cyan-300 leading-relaxed text-sm"></div>
+                        <label class="block text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-2">English Prompt</label>
+                        <div id="detailEnglish" class="bg-slate-900 p-4 rounded-lg font-mono text-cyan-300 text-sm leading-relaxed"></div>
                     </div>
                     <div>
-                        <label class="block text-xs text-slate-500 mb-2 uppercase tracking-wider font-semibold">中文翻译</label>
-                        <div id="detailChinese" class="bg-slate-900 p-5 rounded-xl text-slate-300 leading-relaxed text-sm"></div>
+                        <label class="block text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-2">中文翻译</label>
+                        <div id="detailChinese" class="bg-slate-50 p-4 rounded-lg text-slate-600 text-sm leading-relaxed border border-slate-200"></div>
                     </div>
                 </div>
             </div>
-            <div class="p-5 border-t border-slate-200 flex gap-3">
-                <button onclick="copyDetailAll()" class="flex-1 px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-colors">复制全部</button>
-                <button onclick="closeDetail()" class="px-6 py-3 border border-slate-200 text-slate-600 font-medium rounded-xl hover:bg-slate-50 transition-colors">关闭</button>
+            <div class="p-4 border-t border-slate-100 flex gap-3 justify-end">
+                <button onclick="copyDetailAll()" class="btn-primary">复制全部</button>
+                <button onclick="closeDetail()" class="btn-secondary">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 重命名 Modal -->
+    <div id="renameModal" class="modal-overlay" onclick="closeRename(event)">
+        <div class="modal-box max-w-sm" onclick="event.stopPropagation()">
+            <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+                <h3 class="text-sm font-semibold text-slate-900">重命名项目</h3>
+                <button onclick="closeRename()" class="text-slate-400 hover:text-slate-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-4">
+                <input type="text" id="renameInput" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm">
+            </div>
+            <div class="p-4 border-t border-slate-100 flex gap-3 justify-end">
+                <button onclick="closeRename()" class="btn-secondary">取消</button>
+                <button onclick="confirmRename()" class="btn-primary">保存</button>
             </div>
         </div>
     </div>
@@ -349,104 +351,98 @@
         let selectedAR = '16:9';
         let currentDetailEN = '';
         let currentDetailCN = '';
+        let renamingProjectId = null;
+        let typewriterTimer = null;
+        let typewriterText = '';
+        let typewriterIndex = 0;
+        const MAX_IMAGES = 10;
 
         // ==================== 初始化 ====================
         document.addEventListener('DOMContentLoaded', () => {
             loadHistory();
-            setupUploadZones();
+            renderUploadArea();
+            setupRequirementsUpload();
         });
 
-        // ==================== 视图切换 ====================
-        function switchToConsole() {
-            document.getElementById('inputView').classList.add('view-hidden');
-            document.getElementById('consoleView').classList.remove('view-hidden');
-            document.getElementById('arBadge').textContent = selectedAR;
-        }
-
-        function switchToInput() {
-            document.getElementById('consoleView').classList.add('view-hidden');
-            document.getElementById('inputView').classList.remove('view-hidden');
-        }
-
-        // ==================== 新建项目 ====================
-        function createNewProject() {
-            currentProjectId = null;
-            document.getElementById('projectName').value = '';
-            document.getElementById('anchorPrompt').value = '';
-            removeFile();
-            uploadedImages = [];
-            renderImagePreviews();
-            clearHistoryHighlight();
-            switchToInput();
-            clearConsole();
-            selectAR(document.querySelector('.ar-option[data-value="16:9"]'));
-        }
-
-        // ==================== 画幅选择 ====================
-        function selectAR(el) {
-            document.querySelectorAll('.ar-option').forEach(opt => opt.classList.remove('selected'));
-            el.classList.add('selected');
-            selectedAR = el.dataset.value;
-        }
-
-        // ==================== 历史记录 ====================
-        async function loadHistory() {
-            try {
-                const res = await fetch('/api/projects');
-                const data = await res.json();
-                const container = document.getElementById('historyList');
-                if (data.projects && data.projects.length) {
-                    container.innerHTML = data.projects.map(p => `
-                        <div class="history-item p-3 rounded-xl cursor-pointer" onclick="loadProject(${p.id})" data-id="${p.id}">
-                            <p class="history-name text-sm font-medium text-slate-700 truncate">${escapeHtml(p.project_name)}</p>
-                            <div class="flex items-center gap-2 mt-1">
-                                <span class="px-1.5 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-medium rounded">${p.aspect_ratio || '16:9'}</span>
-                                <span class="text-[10px] text-slate-400">${formatDate(p.updated_at || p.created_at)}</span>
+        // ==================== 上传区域渲染 ====================
+        function renderUploadArea() {
+            const area = document.getElementById('uploadArea');
+            if (uploadedImages.length === 0) {
+                // 初始状态：大虚线框
+                area.innerHTML = `
+                    <div id="uploadZone1" class="upload-zone p-10 text-center">
+                        <input type="file" id="productImages" multiple accept="image/*" class="hidden">
+                        <div class="flex flex-col items-center gap-2">
+                            <div class="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center">
+                                <svg class="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                            </div>
+                            <div>
+                                <p class="text-sm font-medium text-slate-600">点击或拖拽上传图片</p>
+                                <p class="text-xs text-slate-400 mt-0.5">支持 JPG, PNG 格式</p>
                             </div>
                         </div>
-                    `).join('');
-                } else {
-                    container.innerHTML = '<p class="text-xs text-slate-400 text-center py-8">暂无历史项目</p>';
-                }
-            } catch (err) { console.error(err); }
+                    </div>
+                `;
+                setupImageUpload();
+            } else {
+                // 有图片：Grid + 添加按钮
+                const addButton = uploadedImages.length < MAX_IMAGES ? `
+                    <div class="image-thumb upload-zone flex items-center justify-center cursor-pointer" onclick="document.getElementById('addMoreImages').click()">
+                        <svg class="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        <input type="file" id="addMoreImages" multiple accept="image/*" class="hidden" onchange="handleAddMoreImages(this.files)">
+                    </div>
+                ` : '';
+                
+                area.innerHTML = `
+                    <div class="image-grid">
+                        ${uploadedImages.map((img, i) => `
+                            <div class="image-thumb">
+                                <img src="${img.preview}" alt="">
+                                <div class="remove-btn" onclick="event.stopPropagation(); removeImage(${i})">
+                                    <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                </div>
+                            </div>
+                        `).join('')}
+                        ${addButton}
+                    </div>
+                `;
+            }
         }
 
-        function clearHistoryHighlight() {
-            document.querySelectorAll('.history-item').forEach(el => el.classList.remove('active'));
-        }
-
-        // ==================== 上传 ====================
-        function setupUploadZones() {
-            const zone1 = document.getElementById('uploadZone1');
-            const input1 = document.getElementById('productImages');
-            zone1.addEventListener('click', () => input1.click());
-            zone1.addEventListener('dragover', e => { e.preventDefault(); zone1.classList.add('border-indigo-400', 'bg-indigo-50'); });
-            zone1.addEventListener('dragleave', () => zone1.classList.remove('border-indigo-400', 'bg-indigo-50'));
-            zone1.addEventListener('drop', e => { e.preventDefault(); zone1.classList.remove('border-indigo-400', 'bg-indigo-50'); handleImageFiles(e.dataTransfer.files); });
-            input1.addEventListener('change', () => handleImageFiles(input1.files));
-
-            const zone2 = document.getElementById('uploadZone2');
-            const input2 = document.getElementById('requirementsFile');
-            zone2.addEventListener('click', () => input2.click());
-            zone2.addEventListener('dragover', e => { e.preventDefault(); zone2.classList.add('border-purple-400', 'bg-purple-50'); });
-            zone2.addEventListener('dragleave', () => zone2.classList.remove('border-purple-400', 'bg-purple-50'));
-            zone2.addEventListener('drop', e => { e.preventDefault(); zone2.classList.remove('border-purple-400', 'bg-purple-50'); if (e.dataTransfer.files[0]) { input2.files = e.dataTransfer.files; showFileInfo(e.dataTransfer.files[0]); } });
-            input2.addEventListener('change', () => { if (input2.files[0]) showFileInfo(input2.files[0]); });
+        function setupImageUpload() {
+            const zone = document.getElementById('uploadZone1');
+            const input = document.getElementById('productImages');
+            if (!zone || !input) return;
+            
+            zone.addEventListener('click', () => input.click());
+            zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+            zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+            zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('dragover'); handleImageFiles(e.dataTransfer.files); });
+            input.addEventListener('change', () => handleImageFiles(input.files));
         }
 
         async function handleImageFiles(files) {
-            const remaining = 5 - uploadedImages.length;
-            for (const file of Array.from(files).slice(0, remaining)) {
+            const remaining = MAX_IMAGES - uploadedImages.length;
+            const filesToAdd = Array.from(files).slice(0, remaining);
+            
+            for (const file of filesToAdd) {
                 if (file.type.startsWith('image/')) {
                     const compressed = await compressImageFile(file);
                     const reader = new FileReader();
-                    reader.onload = e => { uploadedImages.push({ file: compressed, preview: e.target.result }); renderImagePreviews(); };
+                    reader.onload = e => {
+                        uploadedImages.push({ file: compressed, preview: e.target.result });
+                        renderUploadArea();
+                    };
                     reader.readAsDataURL(compressed);
                 }
             }
         }
 
-        async function compressImageFile(file, maxSize = 1024, quality = 0.8) {
+        async function handleAddMoreImages(files) {
+            await handleImageFiles(files);
+        }
+
+        async function compressImageFile(file, maxSize = 1024, quality = 0.85) {
             return new Promise((resolve, reject) => {
                 const img = new Image();
                 img.onload = () => {
@@ -462,58 +458,221 @@
             });
         }
 
-        function renderImagePreviews() {
-            const grid = document.getElementById('imagePreviewGrid');
-            grid.innerHTML = uploadedImages.map((img, i) => `
-                <div class="img-thumb">
-                    <img src="${img.preview}" alt="">
-                    <div class="overlay" onclick="removeImage(${i})">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                    </div>
-                </div>
-            `).join('');
+        function removeImage(index) {
+            uploadedImages.splice(index, 1);
+            renderUploadArea();
         }
 
-        function removeImage(index) { uploadedImages.splice(index, 1); renderImagePreviews(); }
+        // ==================== 需求表上传 ====================
+        function setupRequirementsUpload() {
+            const zone = document.getElementById('uploadZone2');
+            const input = document.getElementById('requirementsFile');
+            if (!zone || !input) return;
+            
+            zone.addEventListener('click', () => input.click());
+            zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+            zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+            zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('dragover'); if (e.dataTransfer.files[0]) { input.files = e.dataTransfer.files; showFileInfo(e.dataTransfer.files[0]); } });
+            input.addEventListener('change', () => { if (input.files[0]) showFileInfo(input.files[0]); });
+        }
 
         function showFileInfo(file) {
             document.getElementById('fileName').textContent = file.name;
+            document.getElementById('uploadZone2').classList.add('hidden');
             document.getElementById('fileInfo').classList.remove('hidden');
         }
 
         function removeFile() {
             document.getElementById('requirementsFile').value = '';
+            document.getElementById('uploadZone2').classList.remove('hidden');
             document.getElementById('fileInfo').classList.add('hidden');
         }
 
-        // ==================== 阶段一：产品分析（流式打字机） ====================
-        let typewriterTimer = null;
-        let typewriterText = '';
-        let typewriterIndex = 0;
+        // ==================== 视图切换 ====================
+        function switchToConsole() {
+            document.getElementById('inputView').classList.add('view-hidden');
+            document.getElementById('consoleView').classList.remove('view-hidden');
+            document.getElementById('arBadge').textContent = selectedAR;
+        }
 
+        function switchToInput() {
+            document.getElementById('consoleView').classList.add('view-hidden');
+            document.getElementById('inputView').classList.remove('view-hidden');
+        }
+
+        // ==================== 画幅选择 ====================
+        function selectAR(el) {
+            document.querySelectorAll('.segment-btn').forEach(btn => btn.classList.remove('active'));
+            el.classList.add('active');
+            selectedAR = el.dataset.value;
+        }
+
+        // ==================== 历史记录 ====================
+        async function loadHistory() {
+            try {
+                const res = await fetch('/api/projects');
+                const data = await res.json();
+                const container = document.getElementById('historyList');
+                if (data.projects && data.projects.length) {
+                    container.innerHTML = data.projects.map(p => `
+                        <div class="history-item" data-id="${p.id}">
+                            <div class="history-name text-sm text-slate-700 truncate" onclick="loadProject(${p.id})">${escapeHtml(p.project_name)}</div>
+                            <div class="flex items-center gap-2 mt-0.5">
+                                <span class="text-[10px] text-slate-400">${p.aspect_ratio || '16:9'}</span>
+                                <span class="text-[10px] text-slate-400">·</span>
+                                <span class="text-[10px] text-slate-400">${formatDate(p.updated_at || p.created_at)}</span>
+                            </div>
+                            <div class="history-actions">
+                                <button class="history-action-btn" onclick="event.stopPropagation(); openRename(${p.id}, '${escapeHtml(p.project_name)}')" title="重命名">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                                </button>
+                                <button class="history-action-btn delete" onclick="event.stopPropagation(); delProject(${p.id})" title="删除">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<p class="text-xs text-slate-400 text-center py-6">暂无历史项目</p>';
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        function escapeHtml(text) {
+            const d = document.createElement('div');
+            d.textContent = text;
+            return d.innerHTML;
+        }
+
+        function formatDate(str) {
+            const d = new Date(str), now = new Date();
+            const diff = now - d;
+            if (diff < 60000) return '刚刚';
+            if (diff < 3600000) return `${Math.floor(diff/60000)}分钟前`;
+            if (diff < 86400000) return `${Math.floor(diff/3600000)}小时前`;
+            return d.toLocaleDateString('zh-CN');
+        }
+
+        // ==================== 新建项目 ====================
+        function createNewProject() {
+            currentProjectId = null;
+            document.getElementById('projectName').value = '';
+            document.getElementById('anchorPrompt').value = '';
+            removeFile();
+            uploadedImages = [];
+            renderUploadArea();
+            switchToInput();
+            clearConsole();
+            selectAR(document.querySelector('.segment-btn[data-value="16:9"]'));
+            loadHistory();
+        }
+
+        // ==================== 项目管理 ====================
+        async function loadProject(projectId) {
+            try {
+                const res = await fetch(`/api/projects/${projectId}`);
+                const data = await res.json();
+                if (data.success && data.project) {
+                    const p = data.project;
+                    document.getElementById('projectName').value = p.product_name || '';
+                    document.getElementById('anchorPrompt').value = p.anchor_prompt || '';
+                    document.getElementById('useAnchorBtn').classList.remove('hidden');
+                    currentProjectId = p.id;
+
+                    selectedAR = p.aspect_ratio || '16:9';
+                    document.querySelectorAll('.segment-btn').forEach(btn => {
+                        btn.classList.toggle('active', btn.dataset.value === selectedAR);
+                    });
+
+                    if (p.storyboard_content) {
+                        accumulatedContent = p.storyboard_content;
+                        switchToConsole();
+                        renderConsole(accumulatedContent);
+                        document.getElementById('charCount').textContent = `${accumulatedContent.length} 个字符`;
+                        setStatus('已加载项目');
+                    } else {
+                        switchToInput();
+                    }
+                    showToast('✅ 已加载: ' + p.project_name);
+                }
+            } catch (err) { console.error(err); showToast('加载失败'); }
+        }
+
+        async function delProject(projectId) {
+            if (!confirm('删除此项目？')) return;
+            try {
+                const res = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('✅ 已删除');
+                    loadHistory();
+                    if (currentProjectId === projectId) { currentProjectId = null; switchToInput(); clearConsole(); }
+                }
+            } catch (err) { showToast('删除失败'); }
+        }
+
+        // ==================== 重命名 ====================
+        function openRename(id, name) {
+            renamingProjectId = id;
+            document.getElementById('renameInput').value = name;
+            document.getElementById('renameModal').classList.add('show');
+            document.getElementById('renameInput').focus();
+        }
+
+        function closeRename(e) {
+            if (!e || e.target === document.getElementById('renameModal')) {
+                document.getElementById('renameModal').classList.remove('show');
+                renamingProjectId = null;
+            }
+        }
+
+        async function confirmRename() {
+            if (!renamingProjectId) return;
+            const newName = document.getElementById('renameInput').value.trim();
+            if (!newName) { showToast('请输入名称'); return; }
+            
+            try {
+                const res = await fetch('/api/history/rename', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: renamingProjectId, name: newName })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('✅ 已重命名');
+                    closeRename();
+                    loadHistory();
+                } else {
+                    showToast('重命名失败');
+                }
+            } catch (err) { showToast('重命名失败'); }
+        }
+
+        // ==================== 阶段一：产品分析（流式打字机） ====================
         function startTypewriter(text) {
             typewriterText = text;
             typewriterIndex = 0;
             const textarea = document.getElementById('anchorPrompt');
             textarea.value = '';
             document.getElementById('anchorCursor').classList.remove('hidden');
+            document.getElementById('anchorCursor').style.display = 'inline-block';
             document.getElementById('useAnchorBtn').classList.add('hidden');
 
-            function type() {
+            function typeStep() {
                 if (typewriterIndex < typewriterText.length) {
                     textarea.value += typewriterText.charAt(typewriterIndex);
                     typewriterIndex++;
-                    typewriterTimer = setTimeout(type, 15);
+                    typewriterTimer = setTimeout(typeStep, 20);
                 } else {
                     document.getElementById('anchorCursor').classList.add('hidden');
                     document.getElementById('useAnchorBtn').classList.remove('hidden');
                 }
             }
-            type();
+            typeStep();
         }
 
         function useAnchorPrompt() {
-            showToast('锚定词已锁定');
+            showToast('✅ 锚定词已锁定');
         }
 
         async function analyzeProduct() {
@@ -551,10 +710,9 @@
                                     startTypewriter(fullText);
                                 } else if (data.type === 'done') {
                                     btn.disabled = false;
-                                    btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg> 提取产品特征';
-                                    showToast('特征提取完成');
+                                    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg> 提取产品特征';
+                                    showToast('✅ 特征提取完成');
 
-                                    // 保存项目
                                     fetch('/api/analyze_product/save', {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
@@ -563,9 +721,9 @@
                                     .then(r => r.json())
                                     .then(data => { if (data.success) currentProjectId = data.project_id; });
                                 } else if (data.type === 'error') {
-                                    showToast('错误: ' + data.message);
+                                    showToast('❌ ' + data.message);
                                     btn.disabled = false;
-                                    btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg> 提取产品特征';
+                                    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg> 提取产品特征';
                                 }
                             } catch (e) {}
                         }
@@ -573,9 +731,9 @@
                 }
             } catch (err) {
                 console.error(err);
-                showToast('网络错误');
+                showToast('❌ 网络错误');
                 btn.disabled = false;
-                btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg> 提取产品特征';
+                btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg> 提取产品特征';
             }
         }
 
@@ -620,120 +778,133 @@
                 }
             } catch (err) {
                 console.error(err);
-                showToast('生成失败');
+                showToast('❌ 生成失败');
                 setStatus('生成失败');
                 btn.disabled = false;
-                btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg> 生成专业脚本';
+                btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg> 生成专业脚本';
             }
         }
 
         // ==================== 流式处理 ====================
         function handleStreamEvent(data) {
-            const consoleEl = document.getElementById('console');
             const btn = document.getElementById('generateBtn');
 
             switch (data.type) {
                 case 'start':
-                    consoleEl.innerHTML = '<div class="text-center py-20"><div class="w-12 h-12 mx-auto bg-slate-800 rounded-xl flex items-center justify-center mb-4"><div class="spinner"></div></div><p class="text-slate-300">正在生成...</p></div>';
+                    document.getElementById('console').innerHTML = '<div class="text-center py-16"><div class="w-12 h-12 mx-auto bg-slate-100 rounded-xl flex items-center justify-center mb-4"><div class="spinner spinner-dark"></div></div><p class="text-sm font-medium text-slate-600">正在生成...</p></div>';
                     setStatus(data.message);
                     break;
                 case 'chunk':
                     accumulatedContent += data.content;
-                    document.getElementById('charCount').textContent = accumulatedContent.length;
-                    consoleEl.innerHTML = marked.parse(accumulatedContent);
-                    injectPromptActions(consoleEl);
-                    consoleEl.scrollTop = 0;
+                    document.getElementById('charCount').textContent = `${accumulatedContent.length} 个字符`;
+                    renderConsole(accumulatedContent);
                     break;
                 case 'done':
                     setStatus('生成完成');
-                    showToast('脚本生成完成');
+                    showToast('✅ 脚本生成完成');
                     loadHistory();
                     btn.disabled = false;
-                    btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg> 生成专业脚本';
+                    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg> 生成专业脚本';
                     break;
                 case 'error':
                     setStatus('生成失败');
-                    showToast('错误: ' + data.message);
+                    showToast('❌ ' + data.message);
                     btn.disabled = false;
-                    btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg> 生成专业脚本';
+                    btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg> 生成专业脚本';
                     break;
                 case 'saved':
-                    showToast('已保存到历史');
+                    showToast('✅ 已保存到历史');
                     break;
             }
         }
 
-        // ==================== 注入操作按钮 ====================
-        function injectPromptActions(container) {
-            const tables = container.querySelectorAll('table');
-            tables.forEach(table => {
-                table.querySelectorAll('tbody tr, tr').forEach(row => {
-                    const cells = row.querySelectorAll('td');
-                    if (cells.length >= 5) {
-                        [3, 4].forEach(idx => {
-                            const cell = cells[idx];
-                            if (!cell.classList.contains('injected')) {
-                                cell.classList.add('prompt-cell', 'injected');
-                                const actions = document.createElement('div');
-                                actions.className = 'cell-actions';
-                                actions.innerHTML = `
-                                    <button class="btn-copy copy-btn" onclick="copyCellText(this)" title="复制">
-                                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-                                    </button>
-                                    <button class="btn-expand" onclick="expandCell(this)" title="放大">
-                                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg>
-                                    </button>`;
-                                cell.appendChild(actions);
-
-                                cell.querySelectorAll('[title^="中文翻译"]').forEach(span => {
-                                    span.addEventListener('click', () => expandFromSpan(span));
-                                });
-                            }
-                        });
-                    }
-                });
+        function renderConsole(content) {
+            const consoleEl = document.getElementById('console');
+            // 先渲染 Markdown
+            let html = marked.parse(content);
+            consoleEl.innerHTML = html;
+            
+            // 后处理：解析 <!--cn:...--> 注释并转换为 span
+            const walker = document.createTreeWalker(consoleEl, NodeFilter.SHOW_TEXT);
+            const textNodes = [];
+            while (walker.nextNode()) textNodes.push(walker.currentNode);
+            
+            textNodes.forEach(node => {
+                const match = node.textContent.match(/^<!--cn:(.+):-->$/);
+                if (match) {
+                    const span = document.createElement('span');
+                    span.className = 'prompt-cn';
+                    span.style.display = 'none';
+                    span.textContent = match[1];
+                    node.parentNode.replaceChild(span, node);
+                }
             });
+            
+            // 为英文提示词添加悬浮效果
+            consoleEl.querySelectorAll('table tbody tr').forEach(row => {
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 5) {
+                    [3, 4].forEach(idx => {
+                        const cell = cells[idx];
+                        if (!cell.classList.contains('processed')) {
+                            cell.classList.add('prompt-cell', 'processed');
+                            const cnSpan = cell.querySelector('.prompt-cn');
+                            const englishText = cell.textContent.replace(/<!--cn:.*?-->/g, '').trim();
+                            
+                            if (cnSpan) {
+                                cell.setAttribute('title', cnSpan.textContent);
+                                cell.style.cursor = 'pointer';
+                                cell.style.borderBottom = '1px dashed #94a3b8';
+                            }
+                            
+                            // 添加操作按钮
+                            const actions = document.createElement('div');
+                            actions.className = 'actions';
+                            actions.innerHTML = `
+                                <div class="action-btn copy-btn" onclick="copyCellText(this)" title="复制">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                                </div>
+                                <div class="action-btn expand-btn" onclick="expandCell(this)" title="放大">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg>
+                                </div>
+                            `;
+                            cell.style.position = 'relative';
+                            cell.appendChild(actions);
+                        }
+                    });
+                }
+            });
+            
+            consoleEl.scrollTop = 0;
         }
 
         function copyCellText(btn) {
             const cell = btn.closest('td');
-            const temp = document.createElement('div');
-            temp.innerHTML = cell.innerHTML;
-            navigator.clipboard.writeText(temp.textContent.trim()).then(() => {
-                btn.classList.add('success');
-                btn.innerHTML = '<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
-                showToast('已复制');
-                setTimeout(() => {
-                    btn.classList.remove('success');
-                    btn.innerHTML = '<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>';
-                }, 2000);
+            const cnSpan = cell.querySelector('.prompt-cn');
+            const text = cnSpan ? cnSpan.textContent : cell.textContent.replace(/<!--cn:.*?-->/g, '').trim();
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('✅ 已复制');
             });
         }
 
-        function expandCell(btn) { showModalFromCell(btn.closest('td')); }
-        function expandFromSpan(span) { showModalFromCell(span.closest('td')); }
-
-        function showModalFromCell(cell) {
-            const temp = document.createElement('div');
-            temp.innerHTML = cell.innerHTML;
-            let english = '', chinese = '';
-            temp.querySelectorAll('[title^="中文翻译"]').forEach(span => {
-                chinese = span.getAttribute('title').replace('中文翻译：', '');
-                english += span.textContent;
-            });
-            if (!english) english = temp.textContent.trim();
-
-            document.getElementById('detailEnglish').textContent = english;
-            document.getElementById('detailChinese').textContent = chinese;
-            currentDetailEN = english;
-            currentDetailCN = chinese;
+        function expandCell(btn) {
+            const cell = btn.closest('td');
+            const cnSpan = cell.querySelector('.prompt-cn');
+            currentDetailEN = cell.textContent.replace(/<!--cn:.*?-->/g, '').trim();
+            currentDetailCN = cnSpan ? cnSpan.textContent : '';
+            document.getElementById('detailEnglish').textContent = currentDetailEN;
+            document.getElementById('detailChinese').textContent = currentDetailCN;
             document.getElementById('detailModal').classList.add('show');
         }
 
-        function closeDetail(e) { if (!e || e.target === document.getElementById('detailModal')) document.getElementById('detailModal').classList.remove('show'); }
+        function closeDetail(e) {
+            if (!e || e.target === document.getElementById('detailModal')) {
+                document.getElementById('detailModal').classList.remove('show');
+            }
+        }
 
         function copyDetailAll() {
-            navigator.clipboard.writeText(`English:\n${currentDetailEN}\n\n中文:\n${currentDetailCN}`).then(() => showToast('已复制'));
+            navigator.clipboard.writeText(`English:\n${currentDetailEN}\n\n中文:\n${currentDetailCN}`).then(() => showToast('✅ 已复制'));
         }
 
         // ==================== 控制台 ====================
@@ -741,13 +912,13 @@
 
         function clearConsole() {
             accumulatedContent = '';
-            document.getElementById('console').innerHTML = '<div class="text-center py-20"><div class="w-16 h-16 mx-auto bg-slate-800 rounded-2xl flex items-center justify-center mb-4"><div class="spinner"></div></div><p class="text-lg font-medium text-slate-300">正在生成...</p><p class="text-sm mt-2 text-slate-500">请稍候</p></div>';
-            document.getElementById('charCount').textContent = '0';
+            document.getElementById('console').innerHTML = '<div class="text-center py-16"><div class="w-12 h-12 mx-auto bg-slate-100 rounded-xl flex items-center justify-center mb-4"><div class="spinner spinner-dark"></div></div><p class="text-sm font-medium text-slate-600">正在生成...</p><p class="text-xs text-slate-400 mt-1">请稍候</p></div>';
+            document.getElementById('charCount').textContent = '0 个字符';
             setStatus('就绪');
         }
 
         function copyConsole() {
-            if (accumulatedContent) navigator.clipboard.writeText(accumulatedContent).then(() => showToast('已复制'));
+            if (accumulatedContent) navigator.clipboard.writeText(accumulatedContent).then(() => showToast('✅ 已复制'));
         }
 
         function downloadConsole() {
@@ -762,76 +933,12 @@
             }
         }
 
-        // ==================== 项目管理 ====================
-        async function loadProject(projectId) {
-            try {
-                const res = await fetch(`/api/projects/${projectId}`);
-                const data = await res.json();
-                if (data.success && data.project) {
-                    const p = data.project;
-                    document.getElementById('projectName').value = p.product_name || '';
-                    document.getElementById('anchorPrompt').value = p.anchor_prompt || '';
-                    document.getElementById('useAnchorBtn').classList.remove('hidden');
-                    currentProjectId = p.id;
-
-                    const ar = p.aspect_ratio || '16:9';
-                    selectedAR = ar;
-                    selectAR(document.querySelector(`.ar-option[data-value="${ar}"]`));
-
-                    clearHistoryHighlight();
-                    document.querySelector(`.history-item[data-id="${p.id}"]`)?.classList.add('active');
-
-                    if (p.storyboard_content) {
-                        accumulatedContent = p.storyboard_content;
-                        switchToConsole();
-                        const consoleEl = document.getElementById('console');
-                        consoleEl.innerHTML = marked.parse(accumulatedContent);
-                        document.getElementById('charCount').textContent = accumulatedContent.length;
-                        injectPromptActions(consoleEl);
-                        setStatus('已加载项目');
-                        consoleEl.scrollTop = 0;
-                    } else {
-                        switchToInput();
-                    }
-                    showToast('已加载: ' + p.project_name);
-                }
-            } catch (err) { console.error(err); showToast('加载失败'); }
-        }
-
-        async function delProject(projectId) {
-            if (!confirm('删除此项目？')) return;
-            try {
-                const res = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
-                const data = await res.json();
-                if (data.success) {
-                    showToast('已删除');
-                    loadHistory();
-                    if (currentProjectId === projectId) { currentProjectId = null; switchToInput(); clearConsole(); }
-                }
-            } catch (err) { showToast('删除失败'); }
-        }
-
         // ==================== 工具 ====================
         function showToast(msg) {
             const toast = document.getElementById('toast');
             toast.textContent = msg;
             toast.classList.add('show');
-            setTimeout(() => toast.classList.remove('show'), 3000);
-        }
-
-        function escapeHtml(text) {
-            const d = document.createElement('div');
-            d.textContent = text;
-            return d.innerHTML;
-        }
-
-        function formatDate(str) {
-            const d = new Date(str), now = new Date();
-            const diff = now - d;
-            if (diff < 60000) return '刚刚';
-            if (diff < 3600000) return `${Math.floor(diff/60000)}分钟前`;
-            if (diff < 86400000) return `${Math.floor(diff/3600000)}小时前`;
-            return d.toLocaleDateString('zh-CN');
+            setTimeout(() => toast.classList.remove('show'), 2500);
         }
     </script>
 </body>
