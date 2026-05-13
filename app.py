@@ -60,21 +60,10 @@ def get_client():
     return OpenAI(api_key=api_key, base_url=api_base)
 
 
-# ==================== 图片压缩 ====================
-def compress_image(file_data, max_size=(1024, 1024), quality=85):
-    if not PIL_AVAILABLE:
-        return file_data
-    try:
-        img = Image.open(BytesIO(file_data))
-        if img.mode == 'RGBA':
-            img = img.convert('RGB')
-        img.thumbnail(max_size, Image.Resampling.LANCZOS)
-        output = BytesIO()
-        img.save(output, format="JPEG", quality=quality, optimize=True)
-        return output.getvalue()
-    except Exception as e:
-        print(f"图片压缩失败: {e}")
-        return file_data
+# ==================== 图片处理（前端已完成压缩，后端直接透传） ====================
+def compress_image(file_data):
+    """直接透传图片数据，前端已压缩，避免二次画质受损"""
+    return file_data
 
 
 # ==================== Prompt 定义 ====================
@@ -110,36 +99,57 @@ def build_script_system_prompt(aspect_ratio: str) -> str:
 STRICT RULES - VIOLATION = REJECTION
 ═══════════════════════════════════════════════════════════════
 
-【RULE #1: NO HALLUCINATION】
-• Generate EXACTLY the same number of shots as the input table rows
-• ONE row = ONE shot minimum
-• If a row describes multiple actions, split into MULTIPLE shots
-• NEVER invent or add shots not in the input table
+【RULE #0: MARKDOWN TABLE SEPARATOR - MANDATORY】
+• You MUST include the Markdown table separator line |---|---|---|---|---| immediately after the table header.
+• Without this separator line, the table will NOT render correctly.
 
-【RULE #2: ANCHOR KEYWORDS MANDATORY】
+【RULE #1: SHOT DECONSTRUCTION (CRITICAL)】
+• The user's input table represents "Scenes". You MUST deconstruct complex scenes into single, continuous camera movements ("Shots").
+• IF a single row contains ANY of the following, YOU MUST SPLIT IT into multiple sub-shots:
+  - A major change in shot size (e.g., Close-up to Wide, or Wide to Close-up)
+  - Introduction or exit of a human actor
+  - Multiple sequential actions (e.g., "先拍近景收纳，然后镜头拉远看到人推车")
+  - Scene location or environment transitions
+  - Any action that would require AI video models to hallucinate massive scene changes between Start and End frames
+• Use sub-numbering for split shots: e.g., if Row 2 requires splitting, use "2-1", "2-2", "2-3".
+• A single shot should ONLY contain ONE primary camera movement or action.
+• CRITICAL: Forcing multiple actions into one shot causes video model hallucination and scene collapse. ALWAYS SPLIT when in doubt.
+
+【RULE #2: FRAME CONSISTENCY (CRITICAL)】
+• Start and End frame prompts must maintain EXTREME consistency in:
+  - Environment and setting (same location, same background)
+  - Lighting and atmosphere (same light source direction, color temperature, intensity)
+  - Shadow patterns and reflections
+  - Camera angle and perspective
+• Only the MAIN SUBJECT's state/progress should change between Start→End
+• Environment and lighting inconsistencies cause video flickering and deformation. This is UNACCEPTABLE.
+
+【RULE #3: ANCHOR KEYWORDS MANDATORY】
 • EVERY shot (both Start AND End) MUST begin with the anchor keywords
 • Copy-paste anchor keywords VERBATIM - do not modify, translate, or paraphrase
 • Anchor keywords = your product's visual identity
 
-【RULE #3: PROFESSIONAL MIDJOURNEY TAGS REQUIRED】
+【RULE #4: PROFESSIONAL MIDJOURNEY TAGS REQUIRED】
 • Start Frame = [Shot Type] + [Anchor Keywords] + [Initial State] + [Camera/Lighting] + {ar_param}
 • End Frame = [Shot Type] + [Anchor Keywords] + [Final State] + [Camera/Lighting] + {ar_param}
 • Must include professional tags: cinematic lighting, shot on 35mm, photorealistic, film grain, etc.
 • Material and texture details are MANDATORY for the product
 
-【RULE #4: TRANSLATION FORMAT - MANDATORY】
+【RULE #5: TRANSLATION FORMAT - MANDATORY】
 Every Start/End prompt cell MUST use this EXACT format:
 `English prompt text with professional tags {ar_param} __CN__Precise Chinese translation including aspect ratio__ENDCN__`
+
+IMPORTANT: The Chinese translation MUST be wrapped exactly within __CN__ and __ENDCN__ WITHOUT any line breaks inside the tags if possible.
 
 Example:
 `close-up product shot, metallic finish, soft shadows, cinematic lighting, shot on 35mm lens {ar_param} __CN__产品特写，金属质感，柔和阴影，电影级灯光，35mm镜头拍摄__ENDCN__`
 
-【RULE #5: ASPECT RATIO SAFETY】
+【RULE #6: ASPECT RATIO SAFETY】
 • Product MUST NOT be squashed, stretched, or deformed at any ratio
 • Only adjust composition, background, and framing
 • Always include {ar_param} at the END of every prompt
 
-【RULE #6: LOGO STANDARD】
+【RULE #7: LOGO STANDARD】
 • All "logo", "mark", "emblem", "brand" = "LOGO" in English
 • LOGO must be properly integrated into the visual composition
 
@@ -147,10 +157,13 @@ Example:
 OUTPUT FORMAT
 ═══════════════════════════════════════════════════════════════
 
-Output ONLY a pure Markdown table:
+Output ONLY a pure Markdown table. The example below demonstrates SPLITTING - Row 1 is split into two sub-shots because it contains two distinct actions:
 
 | 镜头 | 景别/焦段 | 画面与动作描述 | 首帧提示词(Start) | 尾帧提示词(End) |
-| 1 | wide shot | establishing view | Start prompt __CN__中文翻译__ENDCN__ | End prompt __CN__中文翻译__ENDCN__ |
+|---|---|---|---|---|
+| 1-1 | close-up | detailed view of shelves being organized | Start prompt __CN__中文翻译__ENDCN__ | End prompt __CN__中文翻译__ENDCN__ |
+| 1-2 | medium shot | pulling back to reveal person pushing cart | Start prompt __CN__中文翻译__ENDCN__ | End prompt __CN__中文翻译__ENDCN__ |
+| 2 | wide shot | establishing view of the room | Start prompt __CN__中文翻译__ENDCN__ | End prompt __CN__中文翻译__ENDCN__ |
 
 DO NOT include any other text. Start generating now."""
 
@@ -260,12 +273,12 @@ def export_excel():
         ws['A2'].alignment = Alignment(horizontal='center', vertical='center')
         ws.row_dimensions[2].height = 22
         
-        # 第3行: 锚定词
+        # 第3行: 锚定词（完整显示，不截断）
         ws.merge_cells('A3:G3')
-        ws['A3'] = f"锚定词: {anchor_prompt[:100]}{'...' if len(anchor_prompt) > 100 else ''}"
+        ws['A3'] = f"锚定词: {anchor_prompt}"
         ws['A3'].font = Font(name='Microsoft YaHei', size=9, color="64748b", italic=True)
-        ws['A3'].alignment = Alignment(horizontal='left', vertical='center')
-        ws.row_dimensions[3].height = 18
+        ws['A3'].alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        ws.row_dimensions[3].height = 30
         
         # 第4行: 表头
         headers = ['镜头', '景别/焦段', '画面与动作描述', '首帧提示词 (English)', '首帧翻译 (中文)', '尾帧提示词 (English)', '尾帧翻译 (中文)']
@@ -322,10 +335,10 @@ def export_excel():
             cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
             cell.border = thin_border
             
-            ws.row_dimensions[row_idx].height = 60
+            ws.row_dimensions[row_idx].height = 80
         
-        # 列宽设置
-        col_widths = [8, 12, 25, 45, 22, 45, 22]
+        # 列宽设置（根据内容类型调整，确保完整显示）
+        col_widths = [6, 18, 35, 65, 30, 65, 30]
         for col, width in enumerate(col_widths, 1):
             ws.column_dimensions[get_column_letter(col)].width = width
         
@@ -334,7 +347,9 @@ def export_excel():
         wb.save(output)
         output.seek(0)
         
-        filename = f"分镜脚本_{project_name[:20]}_{datetime.now().strftime('%Y%m%d')}.xlsx"
+        # 生成文件名（过滤非法字符）
+        safe_name = re.sub(r'[\\/*?:"<>|]', '', project_name[:20])
+        filename = f"分镜脚本_{safe_name}_{datetime.now().strftime('%Y%m%d')}.xlsx"
         
         return send_file(
             output,
@@ -351,19 +366,29 @@ def export_excel():
 def parse_storyboard_md(content: str) -> list:
     """解析 Markdown 表格，提取分镜数据"""
     shots = []
-    
-    # 匹配表格行
-    rows = re.findall(r'\|\s*(\d+)\s*\|\s*([^|]+)\|\s*([^|]+)\|\s*(.+?)\s*\|\s*(.+?)\s*\|', content)
-    
+
+    # 匹配表格行 - 支持镜头编号包含字母和符号（如 1-1）
+    rows = re.findall(r'\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*(.+?)\s*\|\s*(.+?)\s*\|', content)
+
     for row in rows:
         num, shot_type, description, start_cell, end_cell = row
-        
+
+        # 跳过表头行（镜头、景别/焦段等中文标识）
+        num_lower = num.lower().strip()
+        if num_lower in ['镜头', 'shot', 'num'] or '景别' in shot_type or '提示词' in shot_type:
+            continue
+
+        # 跳过 Markdown 表格分隔行（如 |---|---|---|---|---|）
+        row_stripped = [c.strip() for c in [num, shot_type, description, start_cell, end_cell]]
+        if all(c in ['', '---', '-'] for c in row_stripped):
+            continue
+
         # 解析首帧
         start_en, start_cn = parse_prompt_cell(start_cell)
-        
+
         # 解析尾帧
         end_en, end_cn = parse_prompt_cell(end_cell)
-        
+
         shots.append({
             'num': num.strip(),
             'shot_type': shot_type.strip(),
@@ -373,7 +398,7 @@ def parse_storyboard_md(content: str) -> list:
             'end_en': end_en.strip(),
             'end_cn': end_cn.strip()
         })
-    
+
     return shots
 
 
@@ -541,6 +566,8 @@ def generate_script():
                         except Exception as excel_err:
                             print(f"Excel 解析失败: {excel_err}")
                             requirements_content = ''
+                    else:
+                        return jsonify({'success': False, 'error': '未安装 Pandas，无法解析 Excel 文件'}), 500
                 elif ext == '.csv':
                     if PANDAS_AVAILABLE:
                         try:
@@ -555,7 +582,23 @@ def generate_script():
         def generate():
             accumulated = ''
             saved_project_id = None
-            
+
+            # ========== 预写入：立即创建项目记录 ==========
+            try:
+                if project_id:
+                    saved_project_id = int(project_id)
+                else:
+                    saved_project_id = create_project(
+                        project_name=f"{product_name} - {datetime.now().strftime('%m%d %H:%M')}",
+                        product_name=product_name,
+                        anchor_prompt=anchor_prompt,
+                        aspect_ratio=aspect_ratio
+                    )
+                yield f"data: {json.dumps({'type': 'project_created', 'project_id': saved_project_id, 'message': '项目已创建'})}\n\n"
+            except Exception as pre_err:
+                print(f"预创建项目失败: {pre_err}")
+            # ============================================
+
             try:
                 system_prompt = build_script_system_prompt(aspect_ratio)
                 user_prompt = build_script_prompt(anchor_prompt, requirements_content, aspect_ratio)
@@ -583,22 +626,11 @@ def generate_script():
 
                 # ========== 强制保存逻辑 ==========
                 try:
-                    if project_id:
-                        # 更新已有项目
-                        update_project(int(project_id), 
-                                     storyboard_content=accumulated, 
-                                     aspect_ratio=aspect_ratio)
-                        saved_project_id = int(project_id)
-                    else:
-                        # 创建新项目
-                        saved_project_id = create_project(
-                            project_name=f"{product_name} - {datetime.now().strftime('%m%d %H:%M')}",
-                            product_name=product_name,
-                            anchor_prompt=anchor_prompt,
-                            storyboard_content=accumulated,
-                            aspect_ratio=aspect_ratio
-                        )
-                    
+                    # 更新项目内容
+                    update_project(saved_project_id,
+                                 storyboard_content=accumulated,
+                                 aspect_ratio=aspect_ratio)
+
                     yield f"data: {json.dumps({'type': 'saved', 'project_id': saved_project_id, 'message': '已保存'})}\n\n"
                 except Exception as save_err:
                     print(f"保存失败: {save_err}")
@@ -659,18 +691,35 @@ Current selection: {ar_display}
 
     prompt += f"""## 【Execution Requirements】
 
-1. Analyze the table row by row, generate at least N shots for N rows
-2. Action splitting: multiple actions → multiple independent shots
-3. Start Frame: initial state + anchor keywords + composition + {ar_param}
-4. End Frame: completed state + anchor keywords + composition + {ar_param}
-5. Chinese translation must include aspect ratio description ({ar_display})
-6. All "logo", "mark", "emblem" unified: "LOGO"
-7. Output format: English prompt text {ar_param} __CN__Chinese translation__ENDCN__
+1. Analyze the table row by row - complex rows MUST be SPLIT into multiple sub-shots
+2. Action splitting triggers (MUST split if ANY apply):
+   - Shot size changes (e.g., Close-up to Wide)
+   - Human actor introduction or exit
+   - Multiple sequential actions in one row
+   - Scene or environment transitions
+   - Any action that would require massive scene changes between Start→End frames
+3. Sub-shot numbering: use "1-1", "1-2", "2-1", "2-2", etc. for split shots
+4. A single shot should ONLY contain ONE primary camera movement or action
+5. Start Frame: initial state + anchor keywords + composition + {ar_param}
+6. End Frame: completed state + anchor keywords + composition + {ar_param}
+7. CRITICAL: Maintain EXTREME consistency between Start/End frames:
+   - Same environment and setting
+   - Same lighting direction, color temperature, and intensity
+   - Only the main subject's state should progress
+8. Chinese translation must include aspect ratio description ({ar_display})
+9. All "logo", "mark", "emblem" unified: "LOGO"
+10. Output format: English prompt text {ar_param} __CN__Chinese translation__ENDCN__
 
 ## 【Output Format - PURE MARKDOWN】
 
 | 镜头 | 景别/焦段 | 画面与动作描述 | 首帧提示词(Start) | 尾帧提示词(End) |
-| 1 | ... | ... | prompt1 __CN__翻译1__ENDCN__ | prompt2 __CN__翻译2__ENDCN__ |
+|---|---|---|---|---|
+| 1-1 | close-up | detailed view of shelves being organized | Start prompt __CN__中文翻译__ENDCN__ | End prompt __CN__中文翻译__ENDCN__ |
+| 1-2 | medium shot | pulling back to reveal person pushing cart | Start prompt __CN__中文翻译__ENDCN__ | End prompt __CN__中文翻译__ENDCN__ |
+| 2 | wide shot | establishing view of the room | Start prompt __CN__中文翻译__ENDCN__ | End prompt __CN__中文翻译__ENDCN__ |
+
+NOTE: The example above shows Row 1 being split into 1-1 and 1-2 due to multiple distinct actions.
+Apply the same logic whenever your input contains complex scenes requiring deconstruction.
 
 Start now:"""
 

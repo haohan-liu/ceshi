@@ -133,7 +133,7 @@
             </div>
 
             <div class="p-3 border-t border-slate-100 text-center">
-                <p class="text-[10px] text-slate-400">© 2026 浩涵 All Rights Reserved</p>
+                <p class="text-xs text-slate-400">© 2026 浩涵 All Rights Reserved</p>
             </div>
         </aside>
 
@@ -259,6 +259,10 @@
                         <span id="charCount" class="text-xs text-slate-400">0 个字符</span>
                         <button onclick="copyConsole()" class="text-xs text-slate-500 hover:text-slate-900">复制</button>
                         <button onclick="downloadExcel()" id="excelBtn" class="text-xs text-slate-500 hover:text-slate-900 hidden">下载</button>
+                        <button onclick="stopGeneration()" id="stopBtn" class="hidden items-center gap-1 px-2 py-1 text-xs bg-red-50 text-red-600 hover:bg-red-100 rounded transition-colors">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"></path></svg>
+                            停止
+                        </button>
                         <button onclick="switchToInput()" class="btn-secondary py-1.5 px-3 text-xs">返回编辑</button>
                     </div>
                 </div>
@@ -350,6 +354,16 @@
     <!-- Toast Container -->
     <div id="toastContainer" class="toast-container"></div>
 
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-white/80 backdrop-blur-sm z-[9999] flex items-center justify-center hidden">
+        <div class="text-center">
+            <div class="w-12 h-12 mx-auto bg-slate-100 rounded-xl flex items-center justify-center mb-4">
+                <div class="spinner spinner-dark"></div>
+            </div>
+            <p class="text-sm font-medium text-slate-600">加载中...</p>
+        </div>
+    </div>
+
     <script>
         // 全局状态
         let uploadedImages = [];
@@ -360,6 +374,10 @@
         let currentDetailCN = '';
         let renamingProjectId = null;
         let deletingProjectId = null;
+        let abortController = null;
+        let isGenerating = false;
+        let hasReceivedContent = false;
+        let isNavigatingHistory = false;
         const MAX_IMAGES = 10;
 
         // 初始化
@@ -395,15 +413,16 @@
 
         function handleCopyAction(btn) {
             const cell = btn.closest('td');
-            const cellText = cell.textContent.trim();
-            const parsed = parsePromptComment(cellText);
-            const text = parsed.cn || parsed.en;
-            
+            // 优先复制英文提示词
+            const en = cell.dataset.en || '';
+            const cn = cell.dataset.cn || '';
+            const text = en || cn;
+
             navigator.clipboard.writeText(text).then(() => {
                 btn.classList.add('copied');
                 btn.innerHTML = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>';
                 showToast('已复制', 'success');
-                
+
                 setTimeout(() => {
                     btn.classList.remove('copied');
                     btn.innerHTML = '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>';
@@ -417,12 +436,10 @@
         }
 
         function handleCellClick(cell) {
-            const cellText = cell.textContent.trim();
-            const parsed = parsePromptComment(cellText);
-            
-            currentDetailEN = parsed.en;
-            currentDetailCN = parsed.cn;
-            
+            // 从 data 属性提取已解析的中英文
+            currentDetailEN = cell.dataset.en || '';
+            currentDetailCN = cell.dataset.cn || '';
+
             document.getElementById('detailEnglish').textContent = currentDetailEN;
             document.getElementById('detailChinese').textContent = currentDetailCN || '无中文翻译';
             document.getElementById('detailModal').classList.add('show');
@@ -626,11 +643,32 @@
 
         // 项目管理
         async function loadProject(projectId) {
+            // 防抖拦截：如果正在切换历史记录，直接返回
+            if (isNavigatingHistory) return;
+
+            // 如果正在生成，强制终止
+            if (isGenerating) {
+                stopGeneration();
+                // 等待终止完成
+                await new Promise(r => setTimeout(r, 100));
+            }
+
+            // 加锁
+            isNavigatingHistory = true;
+
+            // 显示 Loading 遮罩
+            const overlay = document.getElementById('loadingOverlay');
+            overlay.classList.remove('hidden');
+
             try {
                 const res = await fetch(`/api/projects/${projectId}`);
                 const data = await res.json();
                 if (data.success && data.project) {
                     const p = data.project;
+
+                    // 安全清理 DOM：切换前先清空当前内容，防止残余内容混淆
+                    document.getElementById('console').innerHTML = '';
+
                     document.getElementById('projectName').value = p.product_name || '';
                     document.getElementById('anchorPrompt').value = p.anchor_prompt || '';
                     document.getElementById('useAnchorBtn').classList.remove('hidden');
@@ -652,7 +690,14 @@
                     }
                     showToast('已加载: ' + p.project_name, 'success');
                 }
-            } catch (err) { console.error(err); showToast('加载失败', 'error'); }
+            } catch (err) {
+                console.error(err);
+                showToast('加载失败', 'error');
+            } finally {
+                overlay.classList.add('hidden');
+                // 释放锁
+                isNavigatingHistory = false;
+            }
         }
 
         // 删除 Modal
@@ -744,29 +789,6 @@
             navigator.clipboard.writeText(`English:\n${currentDetailEN}\n\n中文:\n${currentDetailCN}`).then(() => showToast('已复制', 'success'));
         }
 
-        // 锚定词打字机效果
-        let anchorTypewriterTimer = null;
-        function startTypewriter(text, textareaId) {
-            const textarea = document.getElementById(textareaId);
-            if (!textarea) return;
-            
-            let index = 0;
-            textarea.value = '';
-            
-            function typeStep() {
-                if (index < text.length) {
-                    textarea.value += text.charAt(index);
-                    index++;
-                    anchorTypewriterTimer = setTimeout(typeStep, 12);
-                }
-            }
-            typeStep();
-        }
-
-        function useAnchorPrompt() {
-            showToast('锚定词已锁定', 'success');
-        }
-
         // 产品分析
         async function analyzeProduct() {
             const productName = document.getElementById('projectName').value.trim() || '未命名';
@@ -776,7 +798,6 @@
 
             btn.disabled = true;
             btn.innerHTML = '<div class="spinner"></div> 分析中...';
-            clearTimeout(anchorTypewriterTimer);
 
             const formData = new FormData();
             formData.append('product_name', productName);
@@ -799,8 +820,11 @@
                             try {
                                 const data = JSON.parse(line.slice(6));
                                 if (data.type === 'chunk') {
+                                    // 直接追加文本，避免打字机重叠问题
                                     fullText = data.accumulated;
-                                    startTypewriter(fullText, 'anchorPrompt');
+                                    const textarea = document.getElementById('anchorPrompt');
+                                    textarea.value = fullText;
+                                    textarea.scrollTop = textarea.scrollHeight;
                                 } else if (data.type === 'done') {
                                     btn.disabled = false;
                                     btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg> 提取产品特征';
@@ -812,7 +836,12 @@
                                         body: JSON.stringify({ anchor_prompt: fullText, product_name: productName })
                                     })
                                     .then(r => r.json())
-                                    .then(data => { if (data.success) currentProjectId = data.project_id; });
+                                    .then(data => {
+                                        if (data.success) {
+                                            currentProjectId = data.project_id;
+                                            loadHistory(); // 修复：保存后刷新历史记录
+                                        }
+                                    });
                                 } else if (data.type === 'error') {
                                     showToast(data.message || '分析失败', 'error');
                                     btn.disabled = false;
@@ -846,6 +875,16 @@
             accumulatedContent = '';
             clearConsole();
             setStatus('生成中...');
+            hasReceivedContent = false;
+
+            // 显示停止按钮
+            isGenerating = true;
+            const stopBtn = document.getElementById('stopBtn');
+            stopBtn.classList.remove('hidden');
+            stopBtn.classList.add('flex');
+
+            // 创建 AbortController
+            abortController = new AbortController();
 
             const formData = new FormData();
             formData.append('anchor_prompt', anchorPrompt);
@@ -855,7 +894,11 @@
             if (reqFile) formData.append('requirements', reqFile);
 
             try {
-                const res = await fetch('/api/generate_script', { method: 'POST', body: formData });
+                const res = await fetch('/api/generate_script', {
+                    method: 'POST',
+                    body: formData,
+                    signal: abortController.signal
+                });
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
                 const reader = res.body.getReader();
@@ -872,11 +915,40 @@
                     }
                 }
             } catch (err) {
-                console.error(err);
-                showToast('❌ 生成失败', 'error');
-                setStatus('生成失败');
+                if (err.name === 'AbortError') {
+                    console.log('生成已终止');
+                    setStatus('已终止');
+                    showToast('生成已终止', 'error');
+                } else {
+                    console.error(err);
+                    showToast('生成失败', 'error');
+                    setStatus('生成失败');
+                }
                 btn.disabled = false;
                 btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg> 生成专业脚本';
+            } finally {
+                stopGenerationCleanup();
+            }
+        }
+
+        function stopGeneration() {
+            if (abortController) {
+                abortController.abort();
+
+                // 如果还没有收到任何内容，返回输入页
+                if (!hasReceivedContent) {
+                    switchToInput();
+                }
+            }
+        }
+
+        function stopGenerationCleanup() {
+            isGenerating = false;
+            abortController = null;
+            const stopBtn = document.getElementById('stopBtn');
+            if (stopBtn) {
+                stopBtn.classList.add('hidden');
+                stopBtn.classList.remove('flex');
             }
         }
 
@@ -885,11 +957,19 @@
             const btn = document.getElementById('generateBtn');
 
             switch (data.type) {
+                case 'project_created':
+                    // 预写入项目创建成功，更新当前项目ID并刷新历史记录
+                    if (data.project_id) {
+                        currentProjectId = data.project_id;
+                    }
+                    loadHistory();
+                    break;
                 case 'start':
                     document.getElementById('console').innerHTML = '<div class="text-center py-16"><div class="w-12 h-12 mx-auto bg-slate-100 rounded-xl flex items-center justify-center mb-4"><div class="spinner spinner-dark"></div></div><p class="text-sm font-medium text-slate-600">正在生成...</p></div>';
                     setStatus(data.message);
                     break;
                 case 'chunk':
+                    hasReceivedContent = true;
                     accumulatedContent += data.content;
                     document.getElementById('charCount').textContent = `${accumulatedContent.length} 个字符`;
                     renderConsole(accumulatedContent);
@@ -899,31 +979,31 @@
                     if (data.project_id) {
                         currentProjectId = data.project_id;
                     }
-                    showToast('已保存到历史', 'success');
                     break;
                 case 'done':
                     setStatus('生成完成');
                     showToast('脚本生成完成', 'success');
-                    loadHistory();
                     btn.disabled = false;
                     btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg> 生成专业脚本';
+                    stopGenerationCleanup();
                     break;
                 case 'error':
                     setStatus('生成失败');
-                    showToast('❌ ' + data.message, 'error');
+                    showToast(data.message || '生成失败', 'error');
                     btn.disabled = false;
                     btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg> 生成专业脚本';
+                    stopGenerationCleanup();
                     break;
             }
         }
 
         // 解析翻译注释
         function parsePromptComment(text) {
-            // 匹配 __CN__xxx__ENDCN__ 格式
-            const match = text.match(/__CN__(.+?)__ENDCN__/);
+            // 匹配 __CN__xxx__ENDCN__ 格式（支持换行）
+            const match = text.match(/__CN__([\s\S]*?)__ENDCN__/);
             if (match) {
                 return {
-                    en: text.replace(/__CN__.+?__ENDCN__/, '').trim(),
+                    en: text.replace(/__CN__[\s\S]*?__ENDCN__/, '').trim(),
                     cn: match[1].trim()
                 };
             }
@@ -933,14 +1013,14 @@
         function renderConsole(content) {
             const consoleEl = document.getElementById('console');
 
-            // 预处理：转换 __CN__ 为悬浮提示 span
-            content = content.replace(/([^\s]+)\s*__CN__(.+?)__ENDCN__/g, 
-                '<span title="$2" class="cursor-help border-b border-dashed border-slate-400 hover:text-blue-600 transition-colors">$1</span>');
+            // 预处理：转换 __CN__ 为上下分层结构
+            content = content.replace(/__CN__([\s\S]*?)__ENDCN__/g,
+                '<div class="text-xs text-slate-500 border-t border-slate-200 mt-2 pt-2 pb-1">$1</div>');
 
             // 渲染 Markdown
             let html = marked.parse(content);
             consoleEl.innerHTML = html;
-            
+
             // 处理表格单元格
             consoleEl.querySelectorAll('table tbody tr').forEach(row => {
                 const cells = row.querySelectorAll('td');
@@ -949,13 +1029,22 @@
                         const cell = cells[idx];
                         if (!cell.classList.contains('prompt-cell')) {
                             cell.classList.add('prompt-cell');
-                            
-                            // 从已存在的 span.title 提取翻译，或从文本解析
-                            const cnSpan = cell.querySelector('span[title]');
-                            const parsed = cnSpan 
-                                ? { en: cnSpan.textContent.trim(), cn: cnSpan.title }
-                                : parsePromptComment(cell.textContent);
-                            
+
+                            // 从已存在的分层 div 提取翻译
+                            const cnDiv = cell.querySelector('.text-slate-500.border-t');
+                            let parsed;
+                            if (cnDiv) {
+                                const cnText = cnDiv.textContent.trim();
+                                const enText = cell.innerHTML.replace(cnDiv.outerHTML, '').replace(/<[^>]+>/g, '').trim();
+                                parsed = { en: enText, cn: cnText };
+                            } else {
+                                parsed = parsePromptComment(cell.textContent);
+                            }
+
+                            // 存储解析结果到 data 属性
+                            cell.dataset.en = parsed.en;
+                            cell.dataset.cn = parsed.cn || '';
+
                             // 添加操作按钮
                             const actions = document.createElement('div');
                             actions.className = 'cell-actions';
@@ -972,7 +1061,7 @@
                     });
                 }
             });
-            
+
             consoleEl.scrollTop = 0;
         }
 

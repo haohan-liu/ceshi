@@ -11,7 +11,7 @@ DATABASE_PATH = os.path.join(os.path.dirname(__file__), 'storyboard_history.db')
 
 def get_connection():
     """获取数据库连接"""
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = sqlite3.connect(DATABASE_PATH, timeout=15)
     conn.row_factory = sqlite3.Row
     return conn
 
